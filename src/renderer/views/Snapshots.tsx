@@ -281,7 +281,7 @@ function StorageSetupCard({
           {!accounts ? (
             <Spinner label="Scanning subscriptions for Azure Storage accounts…" />
           ) : !accounts.length ? (
-            <Notice tone="warn" title="No storage accounts found">
+            <Notice tone="info" title="No storage accounts found">
               No Azure Storage accounts were found in this directory. Switch to
               "Create new GRS storage account" above to provision one.
             </Notice>

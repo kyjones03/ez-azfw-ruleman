@@ -115,7 +115,7 @@ export function CommitDialog({
         <div className="space-y-3">
           {storageConfig === null && (
             <Notice
-              tone="warn"
+              tone="info"
               title="Centralized snapshot storage is required before committing"
             >
               Open the <strong className="text-fg">Snapshots</strong> tab to
