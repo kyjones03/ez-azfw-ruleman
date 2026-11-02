@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Undo2 } from 'lucide-react';
+import { AlertTriangle, Database, Undo2 } from 'lucide-react';
 import { Modal } from '../components/Modal';
+import { Notice } from '../components/ui';
 import { errorMessage, useToast } from '../components/Toast';
-import type { CandidateStatus, ChangeItem } from '../../shared/types';
+import type {
+  CandidateStatus,
+  ChangeItem,
+  SnapshotStorageConfig,
+} from '../../shared/types';
 
 const GLYPH = { added: '+', modified: '~', removed: '−' };
 
@@ -36,11 +41,29 @@ export function CommitDialog({
   );
   const [description, setDescription] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
+  const [storageConfig, setStorageConfig] = useState<
+    SnapshotStorageConfig | null | undefined
+  >(undefined);
   // Groups can leave the list while the dialog is open (e.g. another commit picked them up).
   const chosen = pending.filter((p) => selected.has(p.groupId));
   const riskyCount = chosen.reduce((n, p) => n + (p.warnings?.length ?? 0), 0);
   // A different set of risky changes needs a fresh acknowledgement.
   useEffect(() => setAcknowledged(false), [riskyCount]);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.api
+      .getSnapshotStorageConfig()
+      .then((cfg) => {
+        if (!cancelled) setStorageConfig(cfg);
+      })
+      .catch(() => {
+        if (!cancelled) setStorageConfig(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const revert = async (groupId: string) => {
     try {
@@ -72,7 +95,11 @@ export function CommitDialog({
           <button
             className="btn-candidate"
             onClick={commit}
-            disabled={!chosen.length || (riskyCount > 0 && !acknowledged)}
+            disabled={
+              !chosen.length ||
+              !storageConfig ||
+              (riskyCount > 0 && !acknowledged)
+            }
           >
             Commit {chosen.length} group
             {chosen.length === 1 ? '' : 's'}
@@ -86,6 +113,29 @@ export function CommitDialog({
         </p>
       ) : (
         <div className="space-y-3">
+          {storageConfig === null && (
+            <Notice
+              tone="warn"
+              title="Centralized snapshot storage is required before committing"
+            >
+              Open the <strong className="text-fg">Snapshots</strong> tab to
+              select an existing Azure Storage account or create a new
+              geo-redundant (GRS) Blob Storage account. A cumulative snapshot is
+              saved there automatically on every commit.
+            </Notice>
+          )}
+          {storageConfig && (
+            <div className="flex items-center gap-2 border border-line bg-ink-900 px-3 py-2 text-xs text-fg-muted">
+              <Database size={13} className="shrink-0 text-azure" />
+              <span>
+                Cumulative commit snapshot will be saved to{' '}
+                <span className="font-mono text-fg">
+                  {storageConfig.storageAccountName}/
+                  {storageConfig.containerName}
+                </span>
+              </span>
+            </div>
+          )}
           {pending.map((p) => (
             <div key={p.groupId} className="border border-line">
               <div className="flex items-center gap-3 border-b border-line bg-ink-800 px-3 py-2">

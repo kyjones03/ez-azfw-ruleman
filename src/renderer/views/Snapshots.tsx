@@ -1,14 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Camera,
   ChevronRight,
+  Database,
+  ExternalLink,
   Layers,
   ListTree,
+  Plus,
   RotateCcw,
+  Settings2,
   ShieldCheck,
 } from 'lucide-react';
 import { SelectMenu } from '../components/Dropdown';
-import { ConfirmModal } from '../components/Modal';
+import { ConfirmModal, Modal } from '../components/Modal';
+import { Segmented } from '../components/Segmented';
 import {
   Badge,
   EmptyState,
@@ -20,14 +25,545 @@ import {
 import { errorMessage, useToast } from '../components/Toast';
 import { collectionKindOf } from '../../shared/ruleDraft';
 import { sameResourceId } from '../../shared/resourceId';
+import type { DeployContext, SubscriptionInfo } from '../../shared/deploy';
 import type {
   CandidateStatus,
+  CreateSnapshotStorageRequest,
   FirewallRule,
   PolicySnapshot,
   RuleCollection,
   RuleCollectionGroup,
+  SnapshotStorageAccountInfo,
+  SnapshotStorageConfig,
 } from '../../shared/types';
 import type { PolicyOption } from './PolicyEditor';
+
+const DEFAULT_CONTAINER = 'ez-azfw-snapshots';
+
+const GRS_SKU_OPTIONS: {
+  value: NonNullable<CreateSnapshotStorageRequest['skuName']>;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    value: 'Standard_GRS',
+    label: 'Standard GRS (Geo-redundant storage)',
+    hint: 'Recommended',
+  },
+  {
+    value: 'Standard_RAGRS',
+    label: 'Standard RA-GRS (Read-access geo-redundant)',
+    hint: 'Secondary read',
+  },
+  {
+    value: 'Standard_GZRS',
+    label: 'Standard GZRS (Geo-zone-redundant)',
+    hint: 'Zone + region',
+  },
+  {
+    value: 'Standard_RAGZRS',
+    label: 'Standard RA-GZRS (Read-access geo-zone-redundant)',
+    hint: 'Zone + secondary read',
+  },
+];
+
+function validateAccountNameInput(name: string): string | undefined {
+  const v = name.trim();
+  if (!v) return undefined;
+  if (v.length < 3 || v.length > 24) {
+    return `Must be 3-24 characters (currently ${v.length}).`;
+  }
+  if (!/^[a-z0-9]+$/.test(v)) {
+    return 'Only lowercase letters and numbers are allowed.';
+  }
+  return undefined;
+}
+
+function validateContainerInput(name: string): string | undefined {
+  const v = name.trim();
+  if (!v) return 'Container name is required.';
+  if (v.length < 3 || v.length > 63) {
+    return `Must be 3-63 characters (currently ${v.length}).`;
+  }
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(v) || v.includes('--')) {
+    return 'Use lowercase letters, numbers, and single hyphens.';
+  }
+  return undefined;
+}
+
+function StorageSetupCard({
+  currentConfig,
+  onConfigured,
+  onCancel,
+}: {
+  currentConfig: SnapshotStorageConfig | null;
+  onConfigured: (config: SnapshotStorageConfig) => void;
+  onCancel?: () => void;
+}) {
+  const toast = useToast();
+  const [mode, setMode] = useState<'existing' | 'new'>('existing');
+  const [accounts, setAccounts] = useState<SnapshotStorageAccountInfo[] | null>(
+    null,
+  );
+  const [accountsError, setAccountsError] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState(
+    currentConfig?.storageAccountId ?? '',
+  );
+  const [containerName, setContainerName] = useState(
+    currentConfig?.containerName ?? DEFAULT_CONTAINER,
+  );
+
+  // Create new storage account fields
+  const [subscriptions, setSubscriptions] = useState<SubscriptionInfo[]>([]);
+  const [subscriptionId, setSubscriptionId] = useState('');
+  const [ctx, setCtx] = useState<DeployContext | null>(null);
+  const [rgMode, setRgMode] = useState<'existing' | 'new'>('existing');
+  const [resourceGroup, setResourceGroup] = useState('');
+  const [location, setLocation] = useState('');
+  const [newAccountName, setNewAccountName] = useState('');
+  const [skuName, setSkuName] =
+    useState<NonNullable<CreateSnapshotStorageRequest['skuName']>>(
+      'Standard_GRS',
+    );
+  const [softDeleteDays, setSoftDeleteDays] = useState('30');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    window.api
+      .listSnapshotStorageAccounts()
+      .then((list) => {
+        if (cancelled) return;
+        setAccounts(list);
+        setAccountsError('');
+        if (!selectedAccountId && list.length > 0) {
+          const preferred =
+            list.find((a) => a.isAppTagged) ??
+            list.find((a) => a.isGRS) ??
+            list[0];
+          setSelectedAccountId(preferred.id);
+          if (preferred.containerName) {
+            setContainerName(preferred.containerName);
+          }
+        }
+        if (list.length === 0) setMode('new');
+      })
+      .catch((err) => {
+        if (!cancelled) setAccountsError(errorMessage(err));
+      });
+    window.api
+      .listSubscriptions()
+      .then((subs) => {
+        if (cancelled) return;
+        setSubscriptions(subs);
+        if (subs.length > 0) setSubscriptionId(subs[0].subscriptionId);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!subscriptionId) return;
+    let cancelled = false;
+    setCtx(null);
+    window.api
+      .getDeployContext(subscriptionId)
+      .then((c) => {
+        if (cancelled) return;
+        setCtx(c);
+        if (c.resourceGroups.length > 0) {
+          setRgMode('existing');
+          setResourceGroup(c.resourceGroups[0].name);
+        } else {
+          setRgMode('new');
+          setResourceGroup('rg-ezazfw-snapshots');
+        }
+        setLocation(c.locations[0] ?? 'eastus');
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [subscriptionId]);
+
+  const selectedAccount = useMemo(
+    () =>
+      accounts?.find((a) => sameResourceId(a.id, selectedAccountId)) ?? null,
+    [accounts, selectedAccountId],
+  );
+
+  const containerErr = validateContainerInput(containerName);
+  const accountNameErr = validateAccountNameInput(newAccountName);
+
+  const handleSaveExisting = async () => {
+    if (!selectedAccountId || containerErr) return;
+    setSubmitting(true);
+    try {
+      const cfg = await window.api.setSnapshotStorageAccount(
+        selectedAccountId,
+        containerName.trim(),
+      );
+      toast(
+        'success',
+        `Connected centralized snapshot storage: ${cfg.storageAccountName}/${cfg.containerName} (blob soft delete & versioning enabled).`,
+      );
+      onConfigured(cfg);
+    } catch (err) {
+      toast('error', errorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCreateNew = async () => {
+    const cleanName = newAccountName.trim().toLowerCase();
+    if (
+      !subscriptionId ||
+      !resourceGroup.trim() ||
+      !location ||
+      !cleanName ||
+      accountNameErr ||
+      containerErr
+    ) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const days = Math.min(
+        365,
+        Math.max(1, Number.parseInt(softDeleteDays, 10) || 30),
+      );
+      const cfg = await window.api.createSnapshotStorageAccount({
+        subscriptionId,
+        resourceGroup: resourceGroup.trim(),
+        createResourceGroup: rgMode === 'new',
+        location,
+        storageAccountName: cleanName,
+        containerName: containerName.trim(),
+        skuName,
+        softDeleteDays: days,
+      });
+      toast(
+        'success',
+        `Provisioned GRS storage account ${cfg.storageAccountName} with ${days}-day soft delete and blob versioning.`,
+      );
+      onConfigured(cfg);
+    } catch (err) {
+      toast('error', errorMessage(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <Segmented
+          label="Storage account mode"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'existing', label: 'Use existing storage account' },
+            { value: 'new', label: 'Create new GRS storage account' },
+          ]}
+        />
+      </div>
+
+      {mode === 'existing' ? (
+        <div className="space-y-4">
+          {accountsError && (
+            <Notice tone="error" title="Couldn't list storage accounts">
+              {accountsError}
+            </Notice>
+          )}
+          {!accounts ? (
+            <Spinner label="Scanning subscriptions for Azure Storage accounts…" />
+          ) : !accounts.length ? (
+            <Notice tone="warn" title="No storage accounts found">
+              No Azure Storage accounts were found in this directory. Switch to
+              "Create new GRS storage account" above to provision one.
+            </Notice>
+          ) : (
+            <>
+              <div>
+                <span className="label">Storage account</span>
+                <SelectMenu
+                  label="Select storage account"
+                  widthClass="w-full"
+                  value={selectedAccountId}
+                  onChange={(id) => {
+                    setSelectedAccountId(id);
+                    const found = accounts.find((a) =>
+                      sameResourceId(a.id, id),
+                    );
+                    if (found?.containerName) {
+                      setContainerName(found.containerName);
+                    }
+                  }}
+                  options={accounts.map((a) => ({
+                    value: a.id,
+                    label: `${a.name}${a.isAppTagged ? ' ★ Shared team storage' : ''}`,
+                    hint: `${a.skuName} · ${a.location} · ${a.resourceGroup}`,
+                  }))}
+                />
+                {selectedAccount && !selectedAccount.isGRS && (
+                  <p className="mt-1 text-xs text-candidate">
+                    Note: {selectedAccount.name} uses {selectedAccount.skuName}.
+                    A geo-redundant SKU (Standard_GRS / Standard_GZRS) is
+                    recommended for shared firewall snapshots.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="label" htmlFor="snap-container-existing">
+                  Blob container name
+                </label>
+                <input
+                  id="snap-container-existing"
+                  className="input"
+                  value={containerName}
+                  onChange={(e) =>
+                    setContainerName(e.target.value.toLowerCase())
+                  }
+                  placeholder={DEFAULT_CONTAINER}
+                />
+                {containerErr ? (
+                  <p className="mt-0.5 text-xs text-deny">{containerErr}</p>
+                ) : (
+                  <p className="mt-0.5 text-xs text-fg-faint">
+                    Created automatically if it doesn't exist. Blob soft delete
+                    (30 days), container soft delete, and blob versioning will
+                    be enabled on this storage account.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                {onCancel && (
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={onCancel}
+                    disabled={submitting}
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={!selectedAccountId || !!containerErr || submitting}
+                  onClick={handleSaveExisting}
+                >
+                  <Database size={14} />
+                  {submitting
+                    ? 'Configuring storage…'
+                    : 'Use this storage account'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <span className="label">Subscription</span>
+              <SelectMenu
+                label="Subscription"
+                widthClass="w-full"
+                value={subscriptionId}
+                onChange={setSubscriptionId}
+                options={subscriptions.map((s) => ({
+                  value: s.subscriptionId,
+                  label: s.name,
+                }))}
+              />
+            </div>
+
+            <div>
+              <span className="label">Redundancy (GRS)</span>
+              <SelectMenu
+                label="Redundancy SKU"
+                widthClass="w-full"
+                value={skuName}
+                onChange={(v) =>
+                  setSkuName(
+                    v as NonNullable<CreateSnapshotStorageRequest['skuName']>,
+                  )
+                }
+                options={GRS_SKU_OPTIONS}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <span className="label !mb-0">Resource group</span>
+                <button
+                  type="button"
+                  className="text-xs text-azure hover:underline"
+                  onClick={() =>
+                    setRgMode((m) => (m === 'existing' ? 'new' : 'existing'))
+                  }
+                >
+                  {rgMode === 'existing' ? 'Create new' : 'Use existing'}
+                </button>
+              </div>
+              {rgMode === 'existing' && ctx?.resourceGroups.length ? (
+                <SelectMenu
+                  label="Resource group"
+                  widthClass="w-full"
+                  value={resourceGroup}
+                  onChange={setResourceGroup}
+                  options={ctx.resourceGroups.map((g) => ({
+                    value: g.name,
+                    label: g.name,
+                    hint: g.location,
+                  }))}
+                />
+              ) : (
+                <input
+                  className="input"
+                  value={resourceGroup}
+                  onChange={(e) => setResourceGroup(e.target.value)}
+                  placeholder="rg-ezazfw-snapshots"
+                />
+              )}
+            </div>
+
+            <div>
+              <span className="label">Region</span>
+              <SelectMenu
+                label="Region"
+                widthClass="w-full"
+                value={location}
+                onChange={setLocation}
+                options={
+                  ctx?.locations.length
+                    ? ctx.locations.map((loc) => ({
+                        value: loc,
+                        label: ctx.locationNames?.[loc] ?? loc,
+                        hint: loc,
+                      }))
+                    : [{ value: 'eastus', label: 'East US', hint: 'eastus' }]
+                }
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor="new-storage-name">
+                Storage account name
+              </label>
+              <input
+                id="new-storage-name"
+                className="input font-mono"
+                value={newAccountName}
+                onChange={(e) =>
+                  setNewAccountName(e.target.value.toLowerCase())
+                }
+                placeholder="ezazfwsnapshots01"
+                maxLength={24}
+              />
+              {accountNameErr ? (
+                <p className="mt-0.5 text-xs text-deny">{accountNameErr}</p>
+              ) : (
+                <p className="mt-0.5 text-xs text-fg-faint">
+                  3–24 lowercase letters and numbers, globally unique across
+                  Azure.
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="label" htmlFor="soft-delete-days">
+                Soft delete retention (days)
+              </label>
+              <input
+                id="soft-delete-days"
+                type="number"
+                min={1}
+                max={365}
+                className="input font-mono"
+                value={softDeleteDays}
+                onChange={(e) => setSoftDeleteDays(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="label" htmlFor="snap-container-new">
+              Blob container name
+            </label>
+            <input
+              id="snap-container-new"
+              className="input font-mono"
+              value={containerName}
+              onChange={(e) => setContainerName(e.target.value.toLowerCase())}
+              placeholder={DEFAULT_CONTAINER}
+            />
+            {containerErr && (
+              <p className="mt-0.5 text-xs text-deny">{containerErr}</p>
+            )}
+          </div>
+
+          <div className="border border-line bg-ink-950 px-3 py-2 text-xs text-fg-muted">
+            Provisions a <span className="text-fg">{skuName}</span> StorageV2
+            account with{' '}
+            <span className="text-fg">
+              blob soft delete ({softDeleteDays || 30} days)
+            </span>
+            ,{' '}
+            <span className="text-fg">
+              container soft delete ({softDeleteDays || 30} days)
+            </span>
+            , <span className="text-fg">blob versioning</span>, HTTPS-only, and
+            tags it so teammates using EZ AzFW Rule Manager automatically
+            connect to the same snapshot store.
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            {onCancel && (
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={onCancel}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={
+                !subscriptionId ||
+                !resourceGroup.trim() ||
+                !location ||
+                !newAccountName.trim() ||
+                !!accountNameErr ||
+                !!containerErr ||
+                submitting
+              }
+              onClick={handleCreateNew}
+            >
+              <Plus size={14} />
+              {submitting
+                ? 'Provisioning GRS storage (~20s)…'
+                : 'Create GRS storage account'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const ACTION_COLOR: Record<string, string> = {
   Allow: 'bg-allow text-allow',
@@ -103,6 +639,10 @@ export function Snapshots({
   onRestored: (policyId: string, status: CandidateStatus) => void;
 }) {
   const toast = useToast();
+  const [storageConfig, setStorageConfig] = useState<
+    SnapshotStorageConfig | null | undefined
+  >(undefined);
+  const [showStorageModal, setShowStorageModal] = useState(false);
   const [snapshots, setSnapshots] = useState<PolicySnapshot[] | null>(null);
   const [error, setError] = useState('');
   const [policyFilter, setPolicyFilter] = useState<string>('all');
@@ -116,20 +656,27 @@ export function Snapshots({
   );
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
+  const loadAll = useCallback(async () => {
+    setError('');
+    try {
+      const cfg = await window.api.getSnapshotStorageConfig();
+      setStorageConfig(cfg);
+      if (!cfg) {
+        setSnapshots([]);
+        return;
+      }
+      setSnapshots(null);
+      const list = await window.api.getSnapshots();
+      setSnapshots(list);
+    } catch (err) {
+      setError(errorMessage(err));
+      setSnapshots([]);
+    }
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
-    window.api
-      .getSnapshots()
-      .then((list) => {
-        if (cancelled) return;
-        setSnapshots(list);
-        setError('');
-      })
-      .catch((err) => !cancelled && setError(errorMessage(err)));
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshKey]);
+    void loadAll();
+  }, [loadAll, refreshKey]);
 
   const policyOptions = useMemo(() => {
     const map = new Map<string, { value: string; label: string }>();
@@ -183,40 +730,91 @@ export function Snapshots({
     }
   };
 
-  if (!snapshots) {
+  if (storageConfig === undefined) {
     return (
       <div className="p-6">
-        {error ? (
-          <Notice tone="error" title="Couldn't load policy snapshots">
-            {error}
-          </Notice>
-        ) : (
-          <Spinner label="Loading snapshots…" />
-        )}
+        <Spinner label="Checking centralized snapshot storage…" />
       </div>
     );
   }
 
-  if (!snapshots.length) {
+  // Centralized storage is mandatory — never store snapshots locally.
+  if (storageConfig === null) {
     return (
-      <EmptyState icon={<Camera size={22} />} title="No policy snapshots yet">
-        Policy state snapshots are captured automatically whenever a firewall
-        policy is loaded or updated so you can inspect and roll back to any
-        former state.
-      </EmptyState>
+      <div className="flex h-full flex-col overflow-y-auto p-6">
+        <div className="mx-auto w-full max-w-2xl border border-line bg-ink-900 p-6">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded border border-azure/40 bg-azure/10 text-azure">
+              <Database size={18} />
+            </span>
+            <div>
+              <h1 className="text-lg font-semibold text-fg">
+                Centralized snapshot storage required
+              </h1>
+              <p className="mt-1 text-sm text-fg-muted">
+                Snapshots are never stored on local devices. Choose an existing
+                Azure Storage account or provision a new geo-redundant (GRS)
+                Blob Storage account with soft delete enabled so every teammate
+                shares the same cumulative commit snapshots.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 border-t border-line pt-5">
+            <StorageSetupCard
+              currentConfig={null}
+              onConfigured={(cfg) => {
+                setStorageConfig(cfg);
+                void loadAll();
+              }}
+            />
+          </div>
+        </div>
+      </div>
     );
   }
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-end justify-between gap-4 border-b border-line px-6 pb-4 pt-5">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-line px-6 pb-4 pt-5">
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold">Firewall snapshots</h1>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-xl font-semibold">Firewall snapshots</h1>
+            <span className="inline-flex items-center gap-1.5 rounded border border-line bg-ink-900 px-2.5 py-0.5 text-xs text-fg-muted">
+              <Database size={12} className="text-azure" />
+              <span className="font-mono text-fg">
+                {storageConfig.storageAccountName}/{storageConfig.containerName}
+              </span>
+              {storageConfig.skuName && (
+                <Badge tone="blue">{storageConfig.skuName}</Badge>
+              )}
+              <button
+                type="button"
+                className="ml-1 text-fg-faint hover:text-fg"
+                title="Open storage account in Azure portal"
+                onClick={() =>
+                  window.api
+                    .openInPortal(storageConfig.storageAccountId)
+                    .catch((err) => toast('error', errorMessage(err)))
+                }
+              >
+                <ExternalLink size={12} />
+              </button>
+            </span>
+            <button
+              type="button"
+              className="btn-ghost h-7 px-2 text-xs"
+              onClick={() => setShowStorageModal(true)}
+            >
+              <Settings2 size={13} />
+              Change storage
+            </button>
+          </div>
           <p className="mt-1 text-sm text-fg-muted">
-            Policy states captured when rules or rule collection groups are
-            updated, newest first. Expand a snapshot to inspect its rule
-            collection groups, rule collections, and rules, or roll back to a
-            former state.
+            Cumulative policy states saved in shared Azure Blob Storage each
+            time a commit is applied to Azure, newest first. Expand a snapshot
+            to inspect its rule collection groups, rule collections, and rules,
+            or roll back to a former state.
           </p>
         </div>
         {policyOptions.length > 2 && (
@@ -234,7 +832,27 @@ export function Snapshots({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        {!filtered.length ? (
+        {error && (
+          <div className="mb-4">
+            <Notice tone="error" title="Couldn't load policy snapshots">
+              {error}
+            </Notice>
+          </div>
+        )}
+        {!snapshots ? (
+          <Spinner label="Loading snapshots from Azure Blob Storage…" />
+        ) : !snapshots.length ? (
+          <EmptyState
+            icon={<Camera size={22} />}
+            title="No committed snapshots in shared storage yet"
+          >
+            A single cumulative snapshot is uploaded to{' '}
+            <span className="font-mono text-fg">
+              {storageConfig.storageAccountName}/{storageConfig.containerName}
+            </span>{' '}
+            whenever you or a teammate commits firewall policy changes to Azure.
+          </EmptyState>
+        ) : !filtered.length ? (
           <p className="text-sm text-fg-muted">
             No snapshots for the selected policy.
           </p>
@@ -567,6 +1185,25 @@ export function Snapshots({
           onCancel={() => setConfirmRestore(null)}
           onConfirm={() => handleRestore(confirmRestore)}
         />
+      )}
+
+      {showStorageModal && (
+        <Modal
+          title="Centralized snapshot storage"
+          subtitle="Select an existing Azure Storage account or provision a new GRS Blob Storage account with soft delete enabled."
+          widthClass="max-w-2xl"
+          onClose={() => setShowStorageModal(false)}
+        >
+          <StorageSetupCard
+            currentConfig={storageConfig}
+            onCancel={() => setShowStorageModal(false)}
+            onConfigured={(cfg) => {
+              setStorageConfig(cfg);
+              setShowStorageModal(false);
+              void loadAll();
+            }}
+          />
+        </Modal>
       )}
     </div>
   );

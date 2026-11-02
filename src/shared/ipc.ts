@@ -4,11 +4,14 @@ import type {
   CandidateStatus,
   CommitProgress,
   CommitRecord,
+  CreateSnapshotStorageRequest,
   FirewallSummary,
   PolicySnapshot,
   PolicyView,
   RuleCollectionGroup,
   RuleLookups,
+  SnapshotStorageAccountInfo,
+  SnapshotStorageConfig,
 } from './types';
 import type {
   DeployContext,
@@ -41,6 +44,10 @@ export const IPC = {
   getHistory: 'history:list',
   getSnapshots: 'snapshots:list',
   restoreSnapshot: 'snapshots:restore',
+  getSnapshotStorageConfig: 'snapshots:getStorageConfig',
+  listSnapshotStorageAccounts: 'snapshots:listStorageAccounts',
+  setSnapshotStorageAccount: 'snapshots:setStorageAccount',
+  createSnapshotStorageAccount: 'snapshots:createStorageAccount',
   openInPortal: 'app:openInPortal',
   saveCsv: 'app:saveCsv',
   commitProgress: 'event:commitProgress',
@@ -95,6 +102,15 @@ export interface AzNetApi {
   getSnapshots(): Promise<PolicySnapshot[]>;
   /** Stages a former policy snapshot onto the current policy so it can be reviewed or committed. */
   restoreSnapshot(snapshotId: string): Promise<CandidateStatus>;
+  getSnapshotStorageConfig(): Promise<SnapshotStorageConfig | null>;
+  listSnapshotStorageAccounts(): Promise<SnapshotStorageAccountInfo[]>;
+  setSnapshotStorageAccount(
+    storageAccountId: string,
+    containerName?: string,
+  ): Promise<SnapshotStorageConfig>;
+  createSnapshotStorageAccount(
+    request: CreateSnapshotStorageRequest,
+  ): Promise<SnapshotStorageConfig>;
   openInPortal(resourceId: string): Promise<void>;
   /** Asks where to save, then writes the CSV; resolves to the path, or null if cancelled. */
   saveCsv(suggestedName: string, content: string): Promise<string | null>;

@@ -7,21 +7,35 @@ const azure = vi.hoisted(() => ({
   listRuleCollectionGroups: vi.fn(),
   putRuleCollectionGroup: vi.fn(),
 }));
+const snapshotStorage = vi.hoisted(() => ({
+  requireSnapshotStorageConfigured: vi.fn(),
+  saveSnapshotToCentralStorage: vi.fn(),
+}));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const store = vi.hoisted(() => ({ state: {} as any }));
 vi.mock('./store', () => ({
   loadState: () => store.state,
   updateState: (mutate: (s: unknown) => void) => mutate(store.state),
 }));
+vi.mock('./snapshotStorage', () => snapshotStorage);
 beforeEach(() => {
   store.state = {
     candidate: [],
     history: [],
-    snapshots: [],
     activeCommits: [],
   };
   azure.listRuleCollectionGroups.mockReset();
   azure.listRuleCollectionGroups.mockResolvedValue([]);
+  snapshotStorage.requireSnapshotStorageConfigured.mockReset();
+  snapshotStorage.requireSnapshotStorageConfigured.mockResolvedValue({
+    storageAccountId:
+      '/subscriptions/00000000-1111-2222-3333-444444444444/resourceGroups/rg/providers/Microsoft.Storage/storageAccounts/stsnap',
+    storageAccountName: 'stsnap',
+    containerName: 'ez-azfw-snapshots',
+    configuredAt: '2026-01-01T00:00:00.000Z',
+  });
+  snapshotStorage.saveSnapshotToCentralStorage.mockReset();
+  snapshotStorage.saveSnapshotToCentralStorage.mockResolvedValue(undefined);
 });
 vi.mock('./azure', () => ({
   ...azure,
@@ -512,29 +526,39 @@ describe('committing edits to existing groups', () => {
     expect(azure.getRuleCollectionGroup).not.toHaveBeenCalled();
   });
 
-  it('captures policy state snapshots on load, edit, and commit, and restores a former snapshot', async () => {
+  it('records one cumulative snapshot in central storage only when a commit completes, and restores a former snapshot', async () => {
     const c = await freshCandidate();
-    // Initial view records the baseline snapshot.
+    // Viewing or staging draft changes must never create snapshots.
     c.view(POLICY, running);
-    expect(store.state.snapshots).toHaveLength(1);
-    expect(store.state.snapshots[0]).toMatchObject({
-      policyId: POLICY,
-      policyName: 'fp',
-      description: 'Initial policy state',
-    });
-
-    // Repeat view with identical state does not add a duplicate snapshot.
-    c.view(POLICY, running);
-    expect(store.state.snapshots).toHaveLength(1);
-
-    // Staging an edit creates a new snapshot with the updated state.
     const nextGroup = edited();
     c.stage(POLICY, nextGroup, running[0]);
-    expect(store.state.snapshots).toHaveLength(2);
-    expect(store.state.snapshots[0].groups[0].ruleCollections).toHaveLength(1);
+    expect(snapshotStorage.saveSnapshotToCentralStorage).not.toHaveBeenCalled();
 
-    // Restoring the initial snapshot stages the rollback over the modified running state.
-    const initialSnapshot = store.state.snapshots[1];
+    // Committing records a single cumulative snapshot for the policy in centralized storage.
+    azure.getRuleCollectionGroup.mockResolvedValue(running[0]);
+    azure.putRuleCollectionGroup.mockResolvedValue({});
+    azure.listRuleCollectionGroups.mockResolvedValue([nextGroup]);
+    await c.commit([running[0].id], 'CHG001 cumulative update', 'me', () => {});
+    expect(
+      snapshotStorage.requireSnapshotStorageConfigured,
+    ).toHaveBeenCalledTimes(1);
+    expect(snapshotStorage.saveSnapshotToCentralStorage).toHaveBeenCalledTimes(
+      1,
+    );
+    const savedSnapshot =
+      snapshotStorage.saveSnapshotToCentralStorage.mock.calls[0][0];
+    expect(savedSnapshot).toMatchObject({
+      policyId: POLICY,
+      policyName: 'fp',
+      user: 'me',
+      description: 'CHG001 cumulative update',
+    });
+
+    // Restoring a prior snapshot stages the rollback over the modified running state.
+    const initialSnapshot = {
+      ...savedSnapshot,
+      groups: running,
+    };
     const restoredStatus = c.restoreSnapshot(initialSnapshot, [nextGroup]);
     expect(restoredStatus.pending).toHaveLength(1);
     expect(restoredStatus.pending[0].changes).toEqual([

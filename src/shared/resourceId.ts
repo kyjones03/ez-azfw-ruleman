@@ -48,6 +48,7 @@ export const RESOURCE_TYPES = {
   virtualNetwork: 'Microsoft.Network/virtualNetworks',
   virtualHub: 'Microsoft.Network/virtualHubs',
   deployment: 'Microsoft.Resources/deployments',
+  storageAccount: 'Microsoft.Storage/storageAccounts',
 } as const;
 
 export function isResourceIdOfType(id: unknown, type: string): id is string {

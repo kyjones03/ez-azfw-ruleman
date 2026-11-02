@@ -225,6 +225,48 @@ export interface PolicySnapshot {
   groups: RuleCollectionGroup[];
 }
 
+export interface SnapshotStorageConfig {
+  /** Azure resource ID of the storage account holding shared snapshots. */
+  storageAccountId: string;
+  storageAccountName: string;
+  subscriptionId: string;
+  resourceGroup: string;
+  location: string;
+  skuName?: string;
+  /** Blob container name (defaults to ez-azfw-snapshots). */
+  containerName: string;
+}
+
+export interface SnapshotStorageAccountInfo {
+  id: string;
+  name: string;
+  subscriptionId: string;
+  subscriptionName?: string;
+  resourceGroup: string;
+  location: string;
+  skuName: string;
+  kind?: string;
+  isGRS: boolean;
+  /** Tagged with ez-azfw-ruleman-snapshots = true so teammates can auto-discover it. */
+  isAppTagged?: boolean;
+  containerName?: string;
+}
+
+export interface CreateSnapshotStorageRequest {
+  subscriptionId: string;
+  resourceGroup: string;
+  createResourceGroup?: boolean;
+  location: string;
+  storageAccountName: string;
+  containerName?: string;
+  skuName?:
+    | 'Standard_GRS'
+    | 'Standard_RAGRS'
+    | 'Standard_GZRS'
+    | 'Standard_RAGZRS';
+  softDeleteDays?: number;
+}
+
 export type CommitGroupState =
   | 'pending'
   | 'checking'

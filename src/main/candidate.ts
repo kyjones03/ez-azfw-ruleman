@@ -12,11 +12,13 @@ import {
   describeAzureError,
 } from './azure';
 import {
+  requireSnapshotStorageConfigured,
+  saveSnapshotToCentralStorage,
+} from './snapshotStorage';
+import {
   diffGroups,
-  editableGroup,
   groupsEqual,
   newGroupErrors,
-  stableStringify,
   validateGroup,
 } from '../shared/rules';
 import { resourceName, sameResourceId } from '../shared/resourceId';
@@ -112,7 +114,6 @@ export class Candidate {
     });
     // Keep a saved draft in step on disk; unsaved edits stay unsaved.
     if (rebased && !this.dirty) this.persist();
-    recordPolicySnapshot(policyId, running);
     for (const s of this.staged.values()) {
       if (
         s.created &&
@@ -172,11 +173,6 @@ export class Candidate {
       candidate: group,
     });
     this.dirty = true;
-    this.recordCandidateSnapshot(
-      policyId,
-      running,
-      `Created rule collection group ${name}`,
-    );
     return this.status();
   }
 
@@ -205,23 +201,6 @@ export class Candidate {
       etag: baseline.etag,
     };
 
-    // Ensure the baseline policy state is captured before recording the updated state.
-    if (running) {
-      const state = loadState();
-      const hasSnapshot = (state.snapshots ?? []).some((s) =>
-        sameResourceId(s.policyId, policyId),
-      );
-      if (!hasSnapshot) {
-        const baseList = this.lastKnownRunning.get(key(policyId)) ?? [running];
-        recordPolicySnapshot(policyId, baseList, {
-          description: 'Initial policy state',
-        });
-      }
-    }
-
-    const prevGroup = existing?.candidate ?? baseline;
-    const stepChanges = diffGroups(prevGroup, candidate);
-
     // A new group stays drafted even if empty: creating it is itself the change.
     if (!existing?.created && groupsEqual(baseline, candidate)) {
       this.staged.delete(k);
@@ -237,14 +216,6 @@ export class Candidate {
       });
     }
     this.dirty = true;
-    const summary = summarizeStepChanges(reference.name, stepChanges);
-    this.recordCandidateSnapshot(
-      policyId,
-      running
-        ? (this.lastKnownRunning.get(key(policyId)) ?? [running])
-        : undefined,
-      summary,
-    );
     return this.status();
   }
 
@@ -366,34 +337,6 @@ export class Candidate {
     return this.status();
   }
 
-  private recordCandidateSnapshot(
-    policyId: string,
-    running?: RuleCollectionGroup[],
-    description?: string,
-  ) {
-    const baseGroups =
-      running ??
-      this.lastKnownRunning.get(key(policyId)) ??
-      loadState().snapshots.find((s) => sameResourceId(s.policyId, policyId))
-        ?.groups ??
-      [];
-    const merged = new Map<string, RuleCollectionGroup>();
-    for (const g of baseGroups) {
-      const staged = this.staged.get(key(g.id));
-      merged.set(key(g.id), staged ? staged.candidate : g);
-    }
-    for (const s of this.staged.values()) {
-      if (sameResourceId(s.policyId, policyId) && !merged.has(key(s.groupId))) {
-        merged.set(key(s.groupId), s.candidate);
-      }
-    }
-    if (merged.size > 0) {
-      recordPolicySnapshot(policyId, [...merged.values()], {
-        description,
-      });
-    }
-  }
-
   private persist() {
     updateState((state) => {
       state.candidate = [...this.staged.values()];
@@ -448,6 +391,7 @@ export class Candidate {
       );
     for (const s of selected) this.inFlight.add(key(s.groupId));
     try {
+      await requireSnapshotStorageConfigured();
       return await this.write(selected, description, user, onProgress);
     } finally {
       for (const s of selected) this.inFlight.delete(key(s.groupId));
@@ -660,14 +604,12 @@ export class Candidate {
       try {
         liveGroups = await listRuleCollectionGroups(policyId);
       } catch {
-        // Fall back to merging the known baselines/previous snapshot with the committed groups.
+        // Fall back to merging the known running groups with the committed groups.
       }
       if (!liveGroups || !liveGroups.length) {
-        const prev = loadState().snapshots.find((sn) =>
-          sameResourceId(sn.policyId, policyId),
-        );
+        const known = this.lastKnownRunning.get(key(policyId)) ?? [];
         const merged = new Map<string, RuleCollectionGroup>();
-        for (const g of prev?.groups ?? []) merged.set(key(g.id), g);
+        for (const g of known) merged.set(key(g.id), g);
         for (const s of groups) {
           const written = active.written[key(s.groupId)] ?? s.candidate;
           merged.set(key(s.groupId), written);
@@ -682,12 +624,11 @@ export class Candidate {
         }
         liveGroups = [...merged.values()];
       }
-      recordPolicySnapshot(policyId, liveGroups, {
+      const allChanges = groups.flatMap((g) => changesOf(g));
+      const fallbackDesc = summarizeCommitChanges(groups, allChanges);
+      await recordCommittedPolicySnapshot(policyId, liveGroups, {
         user: active.user,
-        description:
-          active.progress.description ||
-          `Updated ${groups.map((g) => g.candidate.name).join(', ')}`,
-        force: true,
+        description: active.progress.description || fallbackDesc,
       });
     }
   }
@@ -790,80 +731,45 @@ function isBusy(err: unknown): boolean {
   );
 }
 
-function summarizeStepChanges(
-  groupName: string,
+function summarizeCommitChanges(
+  groups: StagedGroup[],
   changes: ChangeItem[],
 ): string {
-  if (!changes.length) return `Updated ${groupName}`;
-  const first = changes[0];
-  const verb =
-    first.kind === 'added'
-      ? 'Added'
-      : first.kind === 'removed'
-        ? 'Deleted'
-        : 'Updated';
-  const subject =
-    first.target === 'group'
-      ? `group ${groupName}`
-      : first.target === 'collection'
-        ? `collection ${first.collection} in ${groupName}`
-        : `rule ${first.rule} in ${groupName} / ${first.collection}`;
-  const more = changes.length > 1 ? ` (+${changes.length - 1} more)` : '';
-  return `${verb} ${subject}${more}`;
-}
-
-function snapshotSignature(groups: RuleCollectionGroup[]): string {
-  const sorted = [...groups].sort(
-    (a, b) => a.priority - b.priority || a.name.localeCompare(b.name),
-  );
-  return stableStringify(
-    sorted.map((g) => ({
-      name: g.name.toLowerCase(),
-      ...editableGroup(g),
-    })),
-  );
+  const groupNames = groups.map((g) => g.candidate.name).join(', ');
+  if (!changes.length) return `Committed ${groupNames}`;
+  const added = changes.filter((c) => c.kind === 'added').length;
+  const modified = changes.filter((c) => c.kind === 'modified').length;
+  const removed = changes.filter((c) => c.kind === 'removed').length;
+  const parts: string[] = [];
+  if (added) parts.push(`+${added} added`);
+  if (modified) parts.push(`~${modified} updated`);
+  if (removed) parts.push(`−${removed} deleted`);
+  return `Committed ${groupNames} (${parts.join(', ')})`;
 }
 
 /**
- * Records a policy snapshot when the policy's state is first loaded or has changed from its
- * latest snapshot, or unconditionally after a commit.
+ * Uploads a single cumulative policy snapshot to the centralized Azure Blob Storage container
+ * when a commit finishes. Snapshots are never saved to local disk.
  */
-export function recordPolicySnapshot(
+export async function recordCommittedPolicySnapshot(
   policyId: string,
   groups: RuleCollectionGroup[],
-  options?: { user?: string; description?: string; force?: boolean },
-): void {
-  const state = loadState();
-  const snapshots = Array.isArray(state.snapshots) ? state.snapshots : [];
-  const latest = snapshots.find((s) => sameResourceId(s.policyId, policyId));
+  options?: { user?: string; description?: string },
+): Promise<PolicySnapshot> {
   const sortedGroups = structuredClone(groups).sort(
     (a, b) => a.priority - b.priority || a.name.localeCompare(b.name),
   );
-
-  if (
-    !options?.force &&
-    latest &&
-    snapshotSignature(latest.groups) === snapshotSignature(sortedGroups)
-  ) {
-    return;
-  }
-
   const snapshot: PolicySnapshot = {
     id: randomUUID(),
     policyId,
     policyName: resourceName(policyId),
     time: new Date().toISOString(),
     user: options?.user,
-    description:
-      options?.description ||
-      (latest ? 'Policy state updated' : 'Initial policy state'),
+    description: options?.description || 'Committed policy changes',
     groups: sortedGroups,
   };
-
-  updateState((s) => {
-    s.snapshots ??= [];
-    s.snapshots.unshift(snapshot);
-  });
+  await saveSnapshotToCentralStorage(snapshot);
+  return snapshot;
 }
 
 /** Polls a group until Azure has finished applying changes to it. */

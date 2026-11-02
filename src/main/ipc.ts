@@ -15,7 +15,10 @@ import {
   isResourceIdOfType,
   portalUrl,
 } from '../shared/resourceId';
-import type { RuleCollectionGroup } from '../shared/types';
+import type {
+  CreateSnapshotStorageRequest,
+  RuleCollectionGroup,
+} from '../shared/types';
 import {
   TIERS,
   type DeployRequest,
@@ -25,6 +28,7 @@ import {
 import * as auth from './auth';
 import * as azure from './azure';
 import * as deploy from './deploy';
+import * as snapshotStorage from './snapshotStorage';
 import { candidate } from './candidate';
 import { clearLookupCache, getRuleLookups } from './lookups';
 import { loadState, updateState } from './store';
@@ -217,16 +221,72 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
     }),
   );
   handle(IPC.getHistory, () => loadState().history);
-  handle(IPC.getSnapshots, () => loadState().snapshots);
+  handle(IPC.getSnapshots, () =>
+    snapshotStorage.listSnapshotsFromCentralStorage(),
+  );
   handle(IPC.restoreSnapshot, async (_e, snapshotId: unknown) => {
     if (typeof snapshotId !== 'string' || !snapshotId.trim()) {
       throw new Error('Invalid snapshot ID.');
     }
-    const snapshot = loadState().snapshots.find((s) => s.id === snapshotId);
-    if (!snapshot) throw new Error('Snapshot not found.');
+    const snapshot =
+      await snapshotStorage.getSnapshotFromCentralStorage(snapshotId);
+    if (!snapshot) throw new Error('Snapshot not found in central storage.');
     const running = await azure.listRuleCollectionGroups(snapshot.policyId);
     for (const g of running) runningCache.set(g.id.toLowerCase(), g);
     return candidate.restoreSnapshot(snapshot, running);
+  });
+  handle(IPC.getSnapshotStorageConfig, () =>
+    snapshotStorage.getSnapshotStorageConfig(),
+  );
+  handle(IPC.listSnapshotStorageAccounts, () =>
+    snapshotStorage.listSnapshotStorageAccounts(),
+  );
+  handle(
+    IPC.setSnapshotStorageAccount,
+    (_e, storageAccountId: unknown, containerName: unknown) => {
+      assertId(
+        storageAccountId,
+        RESOURCE_TYPES.storageAccount,
+        'storage account',
+      );
+      const container = optStr(containerName, 'container name');
+      return snapshotStorage.setSnapshotStorageAccount(
+        storageAccountId,
+        container,
+      );
+    },
+  );
+  handle(IPC.createSnapshotStorageAccount, (_e, raw: unknown) => {
+    const r = raw as Record<string, unknown>;
+    if (!r || typeof r !== 'object') {
+      throw new Error('Invalid storage account request.');
+    }
+    const skuRaw = optStr(r.skuName, 'SKU');
+    const validSkus = [
+      'Standard_GRS',
+      'Standard_RAGRS',
+      'Standard_GZRS',
+      'Standard_RAGZRS',
+    ] as const;
+    const skuName = validSkus.includes(skuRaw as (typeof validSkus)[number])
+      ? (skuRaw as CreateSnapshotStorageRequest['skuName'])
+      : 'Standard_GRS';
+    const req: CreateSnapshotStorageRequest = {
+      subscriptionId: assertSubscription(r.subscriptionId),
+      resourceGroup: str(r.resourceGroup, 'resource group'),
+      createResourceGroup: r.createResourceGroup === true,
+      location: str(r.location, 'region'),
+      storageAccountName: str(r.storageAccountName, 'storage account name'),
+      containerName: optStr(r.containerName, 'container name'),
+      skuName,
+      softDeleteDays:
+        typeof r.softDeleteDays === 'number' &&
+        r.softDeleteDays >= 1 &&
+        r.softDeleteDays <= 365
+          ? Math.floor(r.softDeleteDays)
+          : undefined,
+    };
+    return snapshotStorage.createSnapshotStorageAccount(req);
   });
 
   handle(IPC.openInPortal, async (_e, id: unknown) => {
@@ -235,6 +295,7 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
       RESOURCE_TYPES.policy,
       RESOURCE_TYPES.ruleCollectionGroup,
       RESOURCE_TYPES.deployment,
+      RESOURCE_TYPES.storageAccount,
     ].some((type) => isResourceIdOfType(id, type));
     if (!valid) throw new Error('Invalid resource ID.');
     await shell.openExternal(portalUrl(id as string));
