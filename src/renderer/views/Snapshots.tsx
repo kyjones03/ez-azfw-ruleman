@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Camera,
   ChevronRight,
@@ -9,7 +9,14 @@ import {
 } from 'lucide-react';
 import { SelectMenu } from '../components/Dropdown';
 import { ConfirmModal } from '../components/Modal';
-import { Badge, EmptyState, Notice, Spinner, Truncate, ValueList } from '../components/ui';
+import {
+  Badge,
+  EmptyState,
+  Notice,
+  Spinner,
+  Truncate,
+  ValueList,
+} from '../components/ui';
 import { errorMessage, useToast } from '../components/Toast';
 import { collectionKindOf } from '../../shared/ruleDraft';
 import { sameResourceId } from '../../shared/resourceId';
@@ -76,16 +83,14 @@ function serviceOf(r: FirewallRule) {
 }
 
 function countSnapshotTotals(groups: RuleCollectionGroup[]) {
-  const collections = groups.reduce(
-    (n, g) => n + g.ruleCollections.length,
-    0,
-  );
-  const rules = groups.reduce(
-    (n, g) =>
-      n + g.ruleCollections.reduce((m, c) => m + c.rules.length, 0),
-    0,
-  );
-  return { groups: groups.length, collections, rules };
+  return {
+    groups: groups.length,
+    collections: groups.reduce((n, g) => n + g.ruleCollections.length, 0),
+    rules: groups.reduce(
+      (n, g) => n + g.ruleCollections.reduce((m, c) => m + c.rules.length, 0),
+      0,
+    ),
+  };
 }
 
 export function Snapshots({
@@ -235,7 +240,7 @@ export function Snapshots({
           </p>
         ) : (
           <div className="space-y-3">
-            {filtered.map((snap, idx) => {
+            {filtered.map((snap) => {
               const snapOpen = openSnapshots.has(snap.id);
               const totals = countSnapshotTotals(snap.groups);
               const isLatestForPolicy =
@@ -244,10 +249,7 @@ export function Snapshots({
                 ) === snapshots.indexOf(snap);
 
               return (
-                <div
-                  key={snap.id}
-                  className="border border-line bg-ink-900"
-                >
+                <div key={snap.id} className="border border-line bg-ink-900">
                   <div className="flex items-center gap-3 px-4 py-3 hover:bg-ink-850">
                     <button
                       type="button"
@@ -268,7 +270,7 @@ export function Snapshots({
                           <span className="text-xs text-fg-muted">
                             {new Date(snap.time).toLocaleString()}
                           </span>
-                          {isLatestForPolicy && idx === 0 && (
+                          {isLatestForPolicy && (
                             <Badge tone="blue">Latest</Badge>
                           )}
                           {snap.user && (
@@ -292,8 +294,7 @@ export function Snapshots({
                             ? 'collection'
                             : 'collections'}
                           <span className="text-fg-faint">·</span>
-                          {totals.rules}{' '}
-                          {totals.rules === 1 ? 'rule' : 'rules'}
+                          {totals.rules} {totals.rules === 1 ? 'rule' : 'rules'}
                         </span>
                       </div>
                     </button>
@@ -374,8 +375,7 @@ export function Snapshots({
                                         <div className="space-y-2">
                                           {[...group.ruleCollections]
                                             .sort(
-                                              (a, b) =>
-                                                a.priority - b.priority,
+                                              (a, b) => a.priority - b.priority,
                                             )
                                             .map((col: RuleCollection) => {
                                               const colKey = `${groupKey}:${col.name}`;

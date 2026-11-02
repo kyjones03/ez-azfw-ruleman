@@ -240,7 +240,9 @@ export class Candidate {
     const summary = summarizeStepChanges(reference.name, stepChanges);
     this.recordCandidateSnapshot(
       policyId,
-      running ? (this.lastKnownRunning.get(key(policyId)) ?? [running]) : undefined,
+      running
+        ? (this.lastKnownRunning.get(key(policyId)) ?? [running])
+        : undefined,
       summary,
     );
     return this.status();
@@ -280,7 +282,8 @@ export class Candidate {
     this.dirty = false;
     return this.status();
   }
-/** Stages a former policy snapshot onto the current running groups so the user can review or commit it. */
+
+  /** Stages a former policy snapshot onto the current running groups so the user can review or commit it. */
   restoreSnapshot(
     snapshot: PolicySnapshot,
     running: RuleCollectionGroup[],
@@ -359,6 +362,9 @@ export class Candidate {
       }
     }
 
+    this.dirty = true;
+    return this.status();
+  }
 
   private recordCandidateSnapshot(
     policyId: string,
@@ -387,11 +393,7 @@ export class Candidate {
       });
     }
   }
-    this.dirty = true;
-    return this.status();
-  }
 
-  
   private persist() {
     updateState((state) => {
       state.candidate = [...this.staged.values()];
@@ -493,17 +495,13 @@ export class Candidate {
     };
 
     for (const [index, s] of selected.entries()) {
-      Object.as{
-            active.written[key(s.groupId)] = settled;
-            succeed();
-          }
-          break;
-        }
-      } catch (err) {
-        fail(describeAzureError(err));
-      }
-    }
-    await this.captureCommittedSnapshots(selected, active); const base = resultBase(progress.groups[index]);
+      Object.assign(progress, {
+        index,
+        groupName: s.candidate.name,
+        policyName: s.policyName,
+      });
+      setState(index, 'checking');
+      const base = resultBase(progress.groups[index]);
       const fail = (error: string, conflict = false) => {
         results.push({
           ...base,
@@ -576,17 +574,21 @@ export class Candidate {
           // The write is accepted before Azure finishes applying it to the firewall; the group
           // stays "Updating" until then, and only then is the change in effect.
           const settled = await waitUntilSettled(s.groupId);
-          if (settled.provisioningState?.toLowerCase() === 'failed')
+          if (settled.provisioningState?.toLowerCase() === 'failed') {
             fail(
               'Azure accepted the change but failed to apply it (provisioning state Failed). Check the policy in the Azure portal.',
             );
-          else succeed();
+          } else {
+            active.written[key(s.groupId)] = settled;
+            succeed();
+          }
           break;
         }
       } catch (err) {
         fail(describeAzureError(err));
       }
     }
+    await this.captureCommittedSnapshots(selected, active);
     return this.finish(active, emit);
   }
 
@@ -630,7 +632,11 @@ export class Candidate {
       state.history.unshift(record);
       state.activeCommits = state.activeCommits.filter(
         (c) => c.progress.commitId !== progress.commitId,
-   
+      );
+    });
+    this.dirty = false;
+    return record;
+  }
 
   private async captureCommittedSnapshots(
     selected: StagedGroup[],
@@ -684,10 +690,6 @@ export class Candidate {
         force: true,
       });
     }
-  }   );
-    });
-    this.dirty = false;
-    return record;
   }
 
   /**
@@ -785,9 +787,13 @@ function isBusy(err: unknown): boolean {
   const e = err as { code?: string; message?: string };
   return /UpdateNotAllowedWhenUpdatingOrDeleting|AnotherOperationInProgress|InProgress|Conflict.*Updating/i.test(
     `${e?.code ?? ''} ${e?.message ?? ''}`,
- 
+  );
+}
 
-function summarizeStepChanges(groupName: string, changes: ChangeItem[]): string {
+function summarizeStepChanges(
+  groupName: string,
+  changes: ChangeItem[],
+): string {
   if (!changes.length) return `Updated ${groupName}`;
   const first = changes[0];
   const verb =
@@ -804,24 +810,8 @@ function summarizeStepChanges(groupName: string, changes: ChangeItem[]): string 
         : `rule ${first.rule} in ${groupName} / ${first.collection}`;
   const more = changes.length > 1 ? ` (+${changes.length - 1} more)` : '';
   return `${verb} ${subject}${more}`;
-} );
 }
 
-/** Polls a group until Azure has finished applying changes to it. */
-async function waitUntilSettled(
-  groupId: string,
-  onWaiting?: () => void,
-): Promise<RuleCollectionGroup> {
-  const started = Date.now();
-  for (;;) {
-    let g: RuleCollectionGroup;
-    try {
-      g = await getRuleCollectionGroup(groupId);
-    } catch (err) {
-      // A group that was just created can take a moment to be readable.
-      if (
-        (err as { statusCode?: number }).statusCode === 404 &&
-        Date.now() - started < 60_000
 function snapshotSignature(groups: RuleCollectionGroup[]): string {
   const sorted = [...groups].sort(
     (a, b) => a.priority - b.priority || a.name.localeCompare(b.name),
@@ -876,6 +866,21 @@ export function recordPolicySnapshot(
   });
 }
 
+/** Polls a group until Azure has finished applying changes to it. */
+async function waitUntilSettled(
+  groupId: string,
+  onWaiting?: () => void,
+): Promise<RuleCollectionGroup> {
+  const started = Date.now();
+  for (;;) {
+    let g: RuleCollectionGroup;
+    try {
+      g = await getRuleCollectionGroup(groupId);
+    } catch (err) {
+      // A group that was just created can take a moment to be readable.
+      if (
+        (err as { statusCode?: number }).statusCode === 404 &&
+        Date.now() - started < 60_000
       ) {
         await sleep(Candidate.pollMs);
         continue;
