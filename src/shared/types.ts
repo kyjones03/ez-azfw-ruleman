@@ -215,6 +215,16 @@ export interface CommitRecord {
   results: CommitResult[];
 }
 
+export interface PolicySnapshot {
+  id: string;
+  policyId: string;
+  policyName: string;
+  time: string;
+  user?: string;
+  description: string;
+  groups: RuleCollectionGroup[];
+}
+
 export type CommitGroupState =
   | 'pending'
   | 'checking'

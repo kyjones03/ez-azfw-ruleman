@@ -7,6 +7,7 @@ import type {
   CommitRecord,
   CommitResult,
   LastSignIn,
+  PolicySnapshot,
   RuleCollectionGroup,
 } from '../shared/types';
 
@@ -27,6 +28,7 @@ export interface PersistedState {
   managedFirewallIds: string[];
   candidate: StagedGroup[];
   history: CommitRecord[];
+  snapshots: PolicySnapshot[];
   /** Last browser sign-in, so the next one can go straight to that directory. */
   lastSignIn?: LastSignIn;
   /** Which sign-in to restore silently at startup (no secrets; tokens live in tokenCache). */
@@ -53,12 +55,14 @@ export interface SavedSession {
 }
 
 const MAX_HISTORY = 200;
+const MAX_SNAPSHOTS = 200;
 
 const empty = (): PersistedState => ({
   version: 1,
   managedFirewallIds: [],
   candidate: [],
   history: [],
+  snapshots: [],
   activeCommits: [],
 });
 
@@ -105,6 +109,7 @@ function parse(text: string): PersistedState {
     ...empty(),
     ...rest,
     managedFirewallIds: arrayOr(parsed.managedFirewallIds),
+    snapshots: arrayOr(parsed.snapshots),
     candidate: arrayOr(parsed.candidate),
     history: arrayOr(parsed.history),
     activeCommits: Array.isArray(parsed.activeCommits)
@@ -164,6 +169,7 @@ export function loadState(): PersistedState {
 export function updateState(mutate: (state: PersistedState) => void): void {
   const state = loadState();
   mutate(state);
+  state.snapshots = state.snapshots.slice(0, MAX_SNAPSHOTS);
   state.history = state.history.slice(0, MAX_HISTORY);
   if (persistBlocked) return;
   const target = filePath();

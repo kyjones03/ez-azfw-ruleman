@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  Camera,
   ChevronUp,
   History,
   ListTree,
@@ -12,7 +13,13 @@ import {
 import { Dropdown } from './Dropdown';
 import type { AccountInfo } from '../../shared/types';
 
-export type Tab = 'firewalls' | 'policies' | 'rules' | 'flow' | 'history';
+export type Tab =
+  | 'firewalls'
+  | 'policies'
+  | 'rules'
+  | 'flow'
+  | 'snapshots'
+  | 'history';
 
 function NavItem({
   icon,
@@ -100,6 +107,13 @@ export function Blade({
         label="Flow tester"
         active={tab === 'flow'}
         onClick={() => onTab('flow')}
+      />
+      <NavItem
+        open={open}
+        icon={<Camera size={18} />}
+        label="Snapshots"
+        active={tab === 'snapshots'}
+        onClick={() => onTab('snapshots')}
       />
       <NavItem
         open={open}

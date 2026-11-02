@@ -5,6 +5,7 @@ import type {
   CommitProgress,
   CommitRecord,
   FirewallSummary,
+  PolicySnapshot,
   PolicyView,
   RuleCollectionGroup,
   RuleLookups,
@@ -38,6 +39,8 @@ export const IPC = {
   commit: 'candidate:commit',
   resumeCommit: 'candidate:resumeCommit',
   getHistory: 'history:list',
+  getSnapshots: 'snapshots:list',
+  restoreSnapshot: 'snapshots:restore',
   openInPortal: 'app:openInPortal',
   saveCsv: 'app:saveCsv',
   commitProgress: 'event:commitProgress',
@@ -89,6 +92,9 @@ export interface AzNetApi {
   /** Picks up a commit interrupted by closing the app; null when there is none. */
   resumeCommit(): Promise<CommitProgress | null>;
   getHistory(): Promise<CommitRecord[]>;
+  getSnapshots(): Promise<PolicySnapshot[]>;
+  /** Stages a former policy snapshot onto the current policy so it can be reviewed or committed. */
+  restoreSnapshot(snapshotId: string): Promise<CandidateStatus>;
   openInPortal(resourceId: string): Promise<void>;
   /** Asks where to save, then writes the CSV; resolves to the path, or null if cancelled. */
   saveCsv(suggestedName: string, content: string): Promise<string | null>;

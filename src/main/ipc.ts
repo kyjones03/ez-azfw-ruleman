@@ -217,6 +217,17 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
     }),
   );
   handle(IPC.getHistory, () => loadState().history);
+  handle(IPC.getSnapshots, () => loadState().snapshots);
+  handle(IPC.restoreSnapshot, async (_e, snapshotId: unknown) => {
+    if (typeof snapshotId !== 'string' || !snapshotId.trim()) {
+      throw new Error('Invalid snapshot ID.');
+    }
+    const snapshot = loadState().snapshots.find((s) => s.id === snapshotId);
+    if (!snapshot) throw new Error('Snapshot not found.');
+    const running = await azure.listRuleCollectionGroups(snapshot.policyId);
+    for (const g of running) runningCache.set(g.id.toLowerCase(), g);
+    return candidate.restoreSnapshot(snapshot, running);
+  });
 
   handle(IPC.openInPortal, async (_e, id: unknown) => {
     const valid = [

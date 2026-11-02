@@ -17,6 +17,7 @@ Instead of editing rules live in the Azure portal, you stage changes locally as 
 - **Rule editing** — create and edit rule collection groups, rule collections, and DNAT, network, and application rules, with lookups for IP Groups, service tags, FQDN tags, and web categories.
 - **Draft and commit** — changes are staged in a local candidate that survives restarts. Nothing is sent to Azure until you commit.
 - **Review** — see a per-group diff and a risk assessment (e.g. overly broad sources, destinations, or ports) before committing. Concurrent changes made in Azure are detected using ETags.
+- **Policy snapshots and rollback** — dated snapshots are captured automatically whenever a policy is loaded, updated, or committed, with collapsible Rule Collection Group → Rule Collection → Rules views and one-click rollback to any former state.
 - **Commit history** — every commit is recorded locally with what changed and its outcome.
 - **Flow tester** — check which rule would match a given source, destination, protocol, and port.
 - **CSV import and export** — bulk-edit rules in a spreadsheet and bring them back in.
@@ -92,7 +93,7 @@ Everything the app keeps is stored locally in your user profile, in an `ez-azfw-
 | macOS   | `~/Library/Application Support/ez-azfw-ruleman` |
 | Linux   | `~/.config/ez-azfw-ruleman`                     |
 
-- `ez-azfw-ruleman-state.json` — draft (candidate) changes and commit history.
+- `ez-azfw-ruleman-state.json` — draft (candidate) changes, policy snapshots, and commit history.
 - `msal-cache.bin` — the sign-in token cache, **encrypted** with the OS key store (DPAPI on Windows, Keychain on macOS, libsecret on Linux). If no secure key store is available (e.g. Linux without a keyring), tokens are never written to disk and you sign in again each session.
 
 Delete the folder to reset the app. No telemetry is collected; the app talks only to Microsoft Entra ID and Azure Resource Manager.

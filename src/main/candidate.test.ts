@@ -4,6 +4,7 @@ import type { CommitProgress, RuleCollectionGroup } from '../shared/types';
 // The candidate module touches disk (store) and Azure (azure); stub both.
 const azure = vi.hoisted(() => ({
   getRuleCollectionGroup: vi.fn(),
+  listRuleCollectionGroups: vi.fn(),
   putRuleCollectionGroup: vi.fn(),
 }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -13,7 +14,14 @@ vi.mock('./store', () => ({
   updateState: (mutate: (s: unknown) => void) => mutate(store.state),
 }));
 beforeEach(() => {
-  store.state = { candidate: [], history: [], activeCommits: [] };
+  store.state = {
+    candidate: [],
+    history: [],
+    snapshots: [],
+    activeCommits: [],
+  };
+  azure.listRuleCollectionGroups.mockReset();
+  azure.listRuleCollectionGroups.mockResolvedValue([]);
 });
 vi.mock('./azure', () => ({
   ...azure,
@@ -502,5 +510,39 @@ describe('committing edits to existing groups', () => {
     ).toEqual(['c1', 'c2']);
     expect(c.status().pending.map((p) => p.groupId)).toEqual([other.id]);
     expect(azure.getRuleCollectionGroup).not.toHaveBeenCalled();
+  });
+
+  it('captures policy state snapshots on load, edit, and commit, and restores a former snapshot', async () => {
+    const c = await freshCandidate();
+    // Initial view records the baseline snapshot.
+    c.view(POLICY, running);
+    expect(store.state.snapshots).toHaveLength(1);
+    expect(store.state.snapshots[0]).toMatchObject({
+      policyId: POLICY,
+      policyName: 'fp',
+      description: 'Initial policy state',
+    });
+
+    // Repeat view with identical state does not add a duplicate snapshot.
+    c.view(POLICY, running);
+    expect(store.state.snapshots).toHaveLength(1);
+
+    // Staging an edit creates a new snapshot with the updated state.
+    const nextGroup = edited();
+    c.stage(POLICY, nextGroup, running[0]);
+    expect(store.state.snapshots).toHaveLength(2);
+    expect(store.state.snapshots[0].groups[0].ruleCollections).toHaveLength(1);
+
+    // Restoring the initial snapshot stages the rollback over the modified running state.
+    const initialSnapshot = store.state.snapshots[1];
+    const restoredStatus = c.restoreSnapshot(initialSnapshot, [nextGroup]);
+    expect(restoredStatus.pending).toHaveLength(1);
+    expect(restoredStatus.pending[0].changes).toEqual([
+      expect.objectContaining({
+        kind: 'removed',
+        target: 'collection',
+        collection: 'net-allow-core',
+      }),
+    ]);
   });
 });

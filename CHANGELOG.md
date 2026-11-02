@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-02
+
+### Added
+
+- Firewall policy **Snapshots** tab that captures dated policy states whenever a policy is loaded, staged, or committed, with nested Rule Collection Group → Rule Collection → Rules dropdowns and one-click rollback staging.
+
 ## [1.1.1] - 2026-10-30
 
 ### Fixed
@@ -36,7 +42,8 @@ Initial public release.
 - Encrypted, OS key store–backed token cache.
 - Portable, no-install executables for Windows (x64 and Arm64 `.exe`), macOS (zipped `.app`, arm64 and x64), and Linux (x64 AppImage).
 
-[Unreleased]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases/tag/v1.0.0

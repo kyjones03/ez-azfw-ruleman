@@ -18,6 +18,7 @@ import { CommitStatus } from './views/CommitStatus';
 import { ChevronDown, RefreshCw } from 'lucide-react';
 import { Dropdown } from './components/Dropdown';
 import { CommitHistory } from './views/CommitHistory';
+import { Snapshots } from './views/Snapshots';
 import { DeployWizard } from './views/DeployWizard';
 import { DeployStatus } from './views/DeployStatus';
 import { ActivityMenu } from './components/ActivityMenu';
@@ -603,6 +604,22 @@ export default function App() {
                   onOpenRule={(id, hit) => {
                     setPolicyId(id);
                     setRuleFocus({ ...hit });
+                    setTab('rules');
+                  }}
+                />
+              )}
+              {tab === 'snapshots' && (
+                <Snapshots
+                  policies={policies}
+                  refreshKey={reloadKey}
+                  onRestored={(restoredPolicyId, nextStatus) => {
+                    setStatus(nextStatus);
+                    setReloadKey((k) => k + 1);
+                    setPolicyId(
+                      policies.find((p) =>
+                        sameResourceId(p.id, restoredPolicyId),
+                      )?.id ?? restoredPolicyId,
+                    );
                     setTab('rules');
                   }}
                 />
