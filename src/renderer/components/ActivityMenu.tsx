@@ -65,33 +65,39 @@ export function ActivityMenu({
   const button = useRef<HTMLButtonElement>(null);
 
   const items: Item[] = [
-    ...deployments.map((d): Item => ({
-      kind: 'deploy',
-      time: d.progress.startedAt,
-      unreadAt: d.updatedAt,
-      deploy: d,
-    })),
+    ...deployments.map(
+      (d): Item => ({
+        kind: 'deploy',
+        time: d.progress.startedAt,
+        unreadAt: d.updatedAt,
+        deploy: d,
+      }),
+    ),
     ...commits
       .filter((c) => !clearedAt || c.time > clearedAt)
       .slice(0, MAX_COMMITS)
-      .map((c): Item => ({
-        kind: 'commit',
-        time: c.time,
-        unreadAt: c.time,
-        commit: c,
-      })),
+      .map(
+        (c): Item => ({
+          kind: 'commit',
+          time: c.time,
+          unreadAt: c.time,
+          commit: c,
+        }),
+      ),
     // Live commits until they land in the history (interrupted ones stay as a warning).
     ...liveCommits
       .filter(
         (c) =>
           !commits.some((r) => r.id === c.key) && (!c.progress.done || c.stale),
       )
-      .map((c): Item => ({
-        kind: 'live-commit',
-        time: c.progress.startedAt,
-        unreadAt: c.updatedAt,
-        live: c,
-      })),
+      .map(
+        (c): Item => ({
+          kind: 'live-commit',
+          time: c.progress.startedAt,
+          unreadAt: c.updatedAt,
+          live: c,
+        }),
+      ),
   ].sort((a, b) => {
     // Running work first, then newest first.
     return (

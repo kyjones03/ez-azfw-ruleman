@@ -10,7 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Firewall policy **Snapshots** tab that captures dated policy states whenever a policy is loaded, staged, or committed, with nested Rule Collection Group → Rule Collection → Rules dropdowns and one-click rollback staging.
+- Firewall policy **Snapshots** tab backed by centralized geo-redundant Azure Blob Storage (`Standard_GRS` with blob soft delete, container soft delete, and blob versioning enabled by default) and tenant-wide auto-discovery.
+- Cumulative commit-only policy snapshots that capture the full policy state once per commit, with nested Rule Collection Group → Rule Collection → Rules dropdowns and one-click rollback staging.
 
 ## [1.1.1] - 2026-10-30
 
