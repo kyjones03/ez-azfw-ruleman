@@ -213,6 +213,15 @@ export interface CommitRecord {
   description: string;
   changeCount: number;
   results: CommitResult[];
+  /** Set when the commit went through but its snapshot couldn't be saved to shared storage. */
+  snapshotError?: string;
+  /** Set when the commit went through but couldn't be added to the shared commit history. */
+  historyError?: string;
+}
+
+/** A commit in the shared history; `localOnly` ones exist only on this device. */
+export interface CommitHistoryEntry extends CommitRecord {
+  localOnly?: boolean;
 }
 
 export interface PolicySnapshot {
@@ -235,6 +244,16 @@ export interface SnapshotStorageConfig {
   skuName?: string;
   /** Blob container name (defaults to ez-azfw-snapshots). */
   containerName: string;
+  /** Separate blob container for the shared commit history (defaults to ez-azfw-history). */
+  historyContainerName?: string;
+}
+
+/** Result of creating storage: the saved config plus whether the user was granted blob data access. */
+export interface SnapshotStorageSetup extends SnapshotStorageConfig {
+  /** True when the signed-in user was assigned Storage Blob Data Contributor on the account. */
+  roleAssigned: boolean;
+  /** Why the role couldn't be assigned automatically, and what to do instead. */
+  roleAssignmentError?: string;
 }
 
 export interface SnapshotStorageAccountInfo {
@@ -250,6 +269,7 @@ export interface SnapshotStorageAccountInfo {
   /** Tagged with ez-azfw-ruleman-snapshots = true so teammates can auto-discover it. */
   isAppTagged?: boolean;
   containerName?: string;
+  historyContainerName?: string;
 }
 
 export interface CreateSnapshotStorageRequest {
@@ -259,6 +279,7 @@ export interface CreateSnapshotStorageRequest {
   location: string;
   storageAccountName: string;
   containerName?: string;
+  historyContainerName?: string;
   skuName?:
     | 'Standard_GRS'
     | 'Standard_RAGRS'

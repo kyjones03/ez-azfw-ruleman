@@ -3,7 +3,8 @@
 // (parent) policy groups before the policy's own, groups and collections by priority; the first
 // matching rule wins. DNAT rules aren't inherited, so only the policy's own DNAT rules apply.
 // Things the app can't resolve locally (IP Group members, service-tag ranges, FQDN resolution,
-// web categories, FQDN tags) make a rule a "maybe" instead of a guess.
+// web categories unless the caller supplies the destination's categories, FQDN tags) make a rule
+// a "maybe" instead of a guess.
 import { addressContains } from './search';
 import { collectionKindOf, type CollectionKind } from './ruleDraft';
 import { portCovers } from './rules';
@@ -24,6 +25,11 @@ export interface Flow {
   destination: string;
   protocol: FlowProtocol;
   port?: number;
+  /**
+   * Web categories the destination is known to be in (e.g. from the portal's Web Category Check).
+   * When set, web-category rules are decided against it; when empty, they stay "maybe".
+   */
+  webCategories?: string[];
 }
 
 export interface PolicyLayer {
@@ -246,14 +252,19 @@ function matchApplication(
               `it depends on whether the destination is part of the ${t} FQDN tag, which only Azure knows`,
             ),
     ),
-    ...(r.webCategories ?? []).map(
-      (c): Tri =>
-        destIsIp && isPrivateIp(flow.destination)
-          ? 'no'
-          : u.add(
-              `it depends on whether the site is in the ${c} web category, which only Azure can look up`,
-            ),
-    ),
+    ...(r.webCategories ?? []).map((c): Tri => {
+      if (destIsIp && isPrivateIp(flow.destination)) return 'no';
+      // The user told us which categories the destination is in (Azure has no API to look it up).
+      if (flow.webCategories?.length)
+        return flow.webCategories.some(
+          (asserted) => asserted.toLowerCase() === c.toLowerCase(),
+        )
+          ? 'match'
+          : 'no';
+      return u.add(
+        `it depends on whether the site is in the ${c} web category, which only Azure can look up`,
+      );
+    }),
     ...(r.destinationAddresses ?? []).map(
       (a): Tri =>
         destIsIp && addressContains(a, flow.destination) ? 'match' : 'no',

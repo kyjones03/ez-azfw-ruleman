@@ -2,6 +2,7 @@ import type {
   AccountInfo,
   AuthMethod,
   CandidateStatus,
+  CommitHistoryEntry,
   CommitProgress,
   CommitRecord,
   CreateSnapshotStorageRequest,
@@ -12,6 +13,7 @@ import type {
   RuleLookups,
   SnapshotStorageAccountInfo,
   SnapshotStorageConfig,
+  SnapshotStorageSetup,
 } from './types';
 import type {
   DeployContext,
@@ -42,6 +44,7 @@ export const IPC = {
   commit: 'candidate:commit',
   resumeCommit: 'candidate:resumeCommit',
   getHistory: 'history:list',
+  getCentralHistory: 'history:listShared',
   getSnapshots: 'snapshots:list',
   restoreSnapshot: 'snapshots:restore',
   getSnapshotStorageConfig: 'snapshots:getStorageConfig',
@@ -99,6 +102,8 @@ export interface AzNetApi {
   /** Picks up a commit interrupted by closing the app; null when there is none. */
   resumeCommit(): Promise<CommitProgress | null>;
   getHistory(): Promise<CommitRecord[]>;
+  /** The shared commit history from centralized storage (plus commits that only exist on this device). */
+  getCentralHistory(): Promise<CommitHistoryEntry[]>;
   getSnapshots(): Promise<PolicySnapshot[]>;
   /** Stages a former policy snapshot onto the current policy so it can be reviewed or committed. */
   restoreSnapshot(snapshotId: string): Promise<CandidateStatus>;
@@ -107,10 +112,11 @@ export interface AzNetApi {
   setSnapshotStorageAccount(
     storageAccountId: string,
     containerName?: string,
+    historyContainerName?: string,
   ): Promise<SnapshotStorageConfig>;
   createSnapshotStorageAccount(
     request: CreateSnapshotStorageRequest,
-  ): Promise<SnapshotStorageConfig>;
+  ): Promise<SnapshotStorageSetup>;
   openInPortal(resourceId: string): Promise<void>;
   /** Asks where to save, then writes the CSV; resolves to the path, or null if cancelled. */
   saveCsv(suggestedName: string, content: string): Promise<string | null>;

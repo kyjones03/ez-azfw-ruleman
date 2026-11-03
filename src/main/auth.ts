@@ -24,6 +24,7 @@ import type {
 } from '../shared/types';
 
 const ARM_SCOPES = ['https://management.azure.com/.default'];
+const STORAGE_SCOPES = ['https://storage.azure.com/.default'];
 const ARM = 'https://management.azure.com';
 const LOGIN = 'https://login.microsoftonline.com';
 const TENANTS_URL = `${ARM}/tenants?api-version=2022-12-01`;
@@ -72,6 +73,8 @@ let cachePlugin: EncryptedCachePlugin | null = null;
 let msalAccount: MsalAccount | null = null;
 let cli: AzureCliCredential | null = null;
 const tenantTokens = new Map<string, AccessToken>();
+/** Azure Storage (blob data) tokens per directory, kept apart from the ARM tokens. */
+const storageTokens = new Map<string, AccessToken>();
 let account: AccountInfo | null = null;
 let activeTenant: string | undefined;
 let pendingSignIn: AbortController | null = null;
@@ -217,6 +220,7 @@ function openSignInWindow(url: string, onCancel: () => void): void {
 async function interactive(
   authority: string,
   signal?: AbortSignal,
+  scopes: string[] = ARM_SCOPES,
 ): Promise<AuthenticationResult> {
   if (!pca) throw new Error(SIGNED_OUT);
   const inWindow = method === 'window';
@@ -227,7 +231,7 @@ async function interactive(
   try {
     return await abortable(
       pca.acquireTokenInteractive({
-        scopes: ARM_SCOPES,
+        scopes,
         authority,
         account: msalAccount ?? undefined,
         loginHint: msalAccount?.username,
@@ -728,6 +732,7 @@ function clearState(): void {
   msalAccount = null;
   cli = null;
   tenantTokens.clear();
+  storageTokens.clear();
   credential = null;
   account = null;
   activeTenant = undefined;
@@ -766,4 +771,67 @@ export function onSignOut(listener: () => void): void {
 export function getCredential(): TokenCredential {
   if (!credential) throw new Error(SIGNED_OUT);
   return credential;
+}
+
+/**
+ * Token for Azure Blob Storage data access in the active directory. Blob data is authorized with
+ * the user's own Entra identity (Storage Blob Data roles), so no account keys are needed.
+ */
+export async function getStorageToken(): Promise<string> {
+  if (!activeTenant) throw new Error('Choose a directory to continue.');
+  const tenantId = activeTenant;
+  const cached = storageTokens.get(key(tenantId));
+  if (cached && cached.expiresOnTimestamp - Date.now() > REFRESH_MARGIN_MS)
+    return cached.token;
+
+  const started = generation;
+  let token: AccessToken;
+  if (method === 'cli') {
+    if (!cli) throw new Error(SIGNED_OUT);
+    const t = await cli.getToken(STORAGE_SCOPES, {
+      tenantId,
+      enableCae: false,
+    });
+    if (!t) throw new Error('Azure did not return a storage access token.');
+    token = t;
+  } else {
+    if (!pca || !msalAccount) throw new Error(SIGNED_OUT);
+    const authority = `${LOGIN}/${tenantId}`;
+    try {
+      token = toAccessToken(
+        await pca.acquireTokenSilent({
+          account: msalAccount,
+          scopes: STORAGE_SCOPES,
+          authority,
+          forceRefresh: true,
+        }),
+      );
+    } catch (err) {
+      if (!(err instanceof InteractionRequiredAuthError)) throw err;
+      token = toAccessToken(
+        await interactive(authority, undefined, STORAGE_SCOPES),
+      );
+    }
+  }
+  if (generation !== started) throw new Error(SIGNED_OUT);
+  storageTokens.set(key(tenantId), token);
+  return token.token;
+}
+
+export interface Principal {
+  objectId: string;
+  type: 'User' | 'ServicePrincipal';
+}
+
+/** The signed-in identity, read from its Azure token, for granting it role assignments. */
+export async function getPrincipal(): Promise<Principal> {
+  if (!activeTenant) throw new Error('Choose a directory to continue.');
+  const claims = decodeClaims((await tokenFor(activeTenant)).token);
+  const objectId = claims.oid as string | undefined;
+  if (!objectId)
+    throw new Error("Couldn't determine your Azure identity (object ID).");
+  return {
+    objectId,
+    type: claims.idtyp === 'app' ? 'ServicePrincipal' : 'User',
+  };
 }

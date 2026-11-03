@@ -221,6 +221,9 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
     }),
   );
   handle(IPC.getHistory, () => loadState().history);
+  handle(IPC.getCentralHistory, () =>
+    snapshotStorage.listCommitHistoryFromCentralStorage(loadState().history),
+  );
   handle(IPC.getSnapshots, () =>
     snapshotStorage.listSnapshotsFromCentralStorage(),
   );
@@ -243,16 +246,23 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
   );
   handle(
     IPC.setSnapshotStorageAccount,
-    (_e, storageAccountId: unknown, containerName: unknown) => {
+    (
+      _e,
+      storageAccountId: unknown,
+      containerName: unknown,
+      historyContainerName: unknown,
+    ) => {
       assertId(
         storageAccountId,
         RESOURCE_TYPES.storageAccount,
         'storage account',
       );
       const container = optStr(containerName, 'container name');
+      const history = optStr(historyContainerName, 'history container name');
       return snapshotStorage.setSnapshotStorageAccount(
         storageAccountId,
         container,
+        history,
       );
     },
   );
@@ -278,6 +288,10 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
       location: str(r.location, 'region'),
       storageAccountName: str(r.storageAccountName, 'storage account name'),
       containerName: optStr(r.containerName, 'container name'),
+      historyContainerName: optStr(
+        r.historyContainerName,
+        'history container name',
+      ),
       skuName,
       softDeleteDays:
         typeof r.softDeleteDays === 'number' &&

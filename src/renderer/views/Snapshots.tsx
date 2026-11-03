@@ -6,6 +6,7 @@ import {
   ExternalLink,
   Layers,
   ListTree,
+  Loader2,
   Plus,
   RotateCcw,
   Settings2,
@@ -39,6 +40,8 @@ import type {
 import type { PolicyOption } from './PolicyEditor';
 
 const DEFAULT_CONTAINER = 'ez-azfw-snapshots';
+const DEFAULT_HISTORY_CONTAINER = 'ez-azfw-history';
+const BLOB_ROLE = 'Storage Blob Data Contributor';
 
 const GRS_SKU_OPTIONS: {
   value: NonNullable<CreateSnapshotStorageRequest['skuName']>;
@@ -91,13 +94,88 @@ function validateContainerInput(name: string): string | undefined {
   return undefined;
 }
 
+/** Commit history must not share the snapshot container. */
+function validateHistoryContainerInput(
+  history: string,
+  snapshot: string,
+): string | undefined {
+  const err = validateContainerInput(history);
+  if (err) return err;
+  if (history.trim().toLowerCase() === snapshot.trim().toLowerCase()) {
+    return 'Commit history must use a different blob container than snapshots.';
+  }
+  return undefined;
+}
+
+function ContainerFields({
+  idPrefix,
+  snapshot,
+  history,
+  onSnapshot,
+  onHistory,
+  snapshotErr,
+  historyErr,
+  note,
+}: {
+  idPrefix: string;
+  snapshot: string;
+  history: string;
+  onSnapshot: (v: string) => void;
+  onHistory: (v: string) => void;
+  snapshotErr?: string;
+  historyErr?: string;
+  note?: string;
+}) {
+  return (
+    <div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label" htmlFor={`${idPrefix}-snapshots`}>
+            Snapshot blob container
+          </label>
+          <input
+            id={`${idPrefix}-snapshots`}
+            className="input font-mono"
+            value={snapshot}
+            onChange={(e) => onSnapshot(e.target.value.toLowerCase())}
+            placeholder={DEFAULT_CONTAINER}
+          />
+          {snapshotErr && (
+            <p className="mt-0.5 text-xs text-deny">{snapshotErr}</p>
+          )}
+        </div>
+        <div>
+          <label className="label" htmlFor={`${idPrefix}-history`}>
+            Commit history blob container
+          </label>
+          <input
+            id={`${idPrefix}-history`}
+            className="input font-mono"
+            value={history}
+            onChange={(e) => onHistory(e.target.value.toLowerCase())}
+            placeholder={DEFAULT_HISTORY_CONTAINER}
+          />
+          {historyErr && (
+            <p className="mt-0.5 text-xs text-deny">{historyErr}</p>
+          )}
+        </div>
+      </div>
+      <p className="mt-1 text-xs text-fg-faint">
+        The two must be different containers.{note ? ` ${note}` : ''}
+      </p>
+    </div>
+  );
+}
+
 function StorageSetupCard({
   currentConfig,
   onConfigured,
   onCancel,
 }: {
   currentConfig: SnapshotStorageConfig | null;
-  onConfigured: (config: SnapshotStorageConfig) => void;
+  onConfigured: (
+    config: SnapshotStorageConfig & { roleAssignmentError?: string },
+  ) => void;
   onCancel?: () => void;
 }) {
   const toast = useToast();
@@ -106,11 +184,15 @@ function StorageSetupCard({
     null,
   );
   const [accountsError, setAccountsError] = useState('');
+  const [setupError, setSetupError] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState(
     currentConfig?.storageAccountId ?? '',
   );
   const [containerName, setContainerName] = useState(
     currentConfig?.containerName ?? DEFAULT_CONTAINER,
+  );
+  const [historyContainerName, setHistoryContainerName] = useState(
+    currentConfig?.historyContainerName ?? DEFAULT_HISTORY_CONTAINER,
   );
 
   // Create new storage account fields
@@ -145,6 +227,9 @@ function StorageSetupCard({
           if (preferred.containerName) {
             setContainerName(preferred.containerName);
           }
+          if (preferred.historyContainerName) {
+            setHistoryContainerName(preferred.historyContainerName);
+          }
         }
         if (list.length === 0) setMode('new');
       })
@@ -158,7 +243,12 @@ function StorageSetupCard({
         setSubscriptions(subs);
         if (subs.length > 0) setSubscriptionId(subs[0].subscriptionId);
       })
-      .catch(() => undefined);
+      .catch((err) => {
+        if (!cancelled) {
+          setSetupError(errorMessage(err));
+          setSubscriptions([]);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -182,7 +272,9 @@ function StorageSetupCard({
         }
         setLocation(c.locations[0] ?? 'eastus');
       })
-      .catch(() => undefined);
+      .catch((err) => {
+        if (!cancelled) setSetupError(errorMessage(err));
+      });
     return () => {
       cancelled = true;
     };
@@ -195,15 +287,20 @@ function StorageSetupCard({
   );
 
   const containerErr = validateContainerInput(containerName);
+  const historyErr = validateHistoryContainerInput(
+    historyContainerName,
+    containerName,
+  );
   const accountNameErr = validateAccountNameInput(newAccountName);
 
   const handleSaveExisting = async () => {
-    if (!selectedAccountId || containerErr) return;
+    if (!selectedAccountId || containerErr || historyErr) return;
     setSubmitting(true);
     try {
       const cfg = await window.api.setSnapshotStorageAccount(
         selectedAccountId,
         containerName.trim(),
+        historyContainerName.trim(),
       );
       toast(
         'success',
@@ -225,7 +322,8 @@ function StorageSetupCard({
       !location ||
       !cleanName ||
       accountNameErr ||
-      containerErr
+      containerErr ||
+      historyErr
     ) {
       return;
     }
@@ -235,21 +333,22 @@ function StorageSetupCard({
         365,
         Math.max(1, Number.parseInt(softDeleteDays, 10) || 30),
       );
-      const cfg = await window.api.createSnapshotStorageAccount({
+      const setup = await window.api.createSnapshotStorageAccount({
         subscriptionId,
         resourceGroup: resourceGroup.trim(),
         createResourceGroup: rgMode === 'new',
         location,
         storageAccountName: cleanName,
         containerName: containerName.trim(),
+        historyContainerName: historyContainerName.trim(),
         skuName,
         softDeleteDays: days,
       });
       toast(
         'success',
-        `Provisioned GRS storage account ${cfg.storageAccountName} with ${days}-day soft delete and blob versioning.`,
+        `Provisioned GRS storage account ${setup.storageAccountName} with ${days}-day soft delete and blob versioning.${setup.roleAssigned ? ` You were granted "${BLOB_ROLE}" on it. Azure can take a few minutes to apply the role.` : ''}`,
       );
-      onConfigured(cfg);
+      onConfigured(setup);
     } catch (err) {
       toast('error', errorMessage(err));
     } finally {
@@ -273,12 +372,20 @@ function StorageSetupCard({
 
       {mode === 'existing' ? (
         <div className="space-y-4">
+          <Notice tone="info" title="You need blob data access on this account">
+            Snapshots are read and written as blobs using your own sign-in.
+            Before connecting, give yourself the "{BLOB_ROLE}" role on the
+            storage account in the Azure portal under Access control (IAM).
+            Owner and Contributor don't include blob data access, and a new role
+            assignment can take a few minutes to apply. Teammates who view or
+            restore snapshots need the same role.
+          </Notice>
           {accountsError && (
             <Notice tone="error" title="Couldn't list storage accounts">
               {accountsError}
             </Notice>
           )}
-          {!accounts ? (
+          {accountsError ? null : !accounts ? (
             <Spinner label="Scanning subscriptions for Azure Storage accounts…" />
           ) : !accounts.length ? (
             <Notice tone="info" title="No storage accounts found">
@@ -301,6 +408,9 @@ function StorageSetupCard({
                     if (found?.containerName) {
                       setContainerName(found.containerName);
                     }
+                    if (found?.historyContainerName) {
+                      setHistoryContainerName(found.historyContainerName);
+                    }
                   }}
                   options={accounts.map((a) => ({
                     value: a.id,
@@ -317,29 +427,16 @@ function StorageSetupCard({
                 )}
               </div>
 
-              <div>
-                <label className="label" htmlFor="snap-container-existing">
-                  Blob container name
-                </label>
-                <input
-                  id="snap-container-existing"
-                  className="input"
-                  value={containerName}
-                  onChange={(e) =>
-                    setContainerName(e.target.value.toLowerCase())
-                  }
-                  placeholder={DEFAULT_CONTAINER}
-                />
-                {containerErr ? (
-                  <p className="mt-0.5 text-xs text-deny">{containerErr}</p>
-                ) : (
-                  <p className="mt-0.5 text-xs text-fg-faint">
-                    Created automatically if it doesn't exist. Blob soft delete
-                    (30 days), container soft delete, and blob versioning will
-                    be enabled on this storage account.
-                  </p>
-                )}
-              </div>
+              <ContainerFields
+                idPrefix="snap-container-existing"
+                snapshot={containerName}
+                history={historyContainerName}
+                onSnapshot={setContainerName}
+                onHistory={setHistoryContainerName}
+                snapshotErr={containerErr}
+                historyErr={historyErr}
+                note="Created automatically if they don't exist. Blob soft delete (30 days), container soft delete, and blob versioning will be enabled on this storage account."
+              />
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 {onCancel && (
@@ -355,10 +452,19 @@ function StorageSetupCard({
                 <button
                   type="button"
                   className="btn-primary"
-                  disabled={!selectedAccountId || !!containerErr || submitting}
+                  disabled={
+                    !selectedAccountId ||
+                    !!containerErr ||
+                    !!historyErr ||
+                    submitting
+                  }
                   onClick={handleSaveExisting}
                 >
-                  <Database size={14} />
+                  {submitting ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Database size={14} />
+                  )}
                   {submitting
                     ? 'Configuring storage…'
                     : 'Use this storage account'}
@@ -369,6 +475,18 @@ function StorageSetupCard({
         </div>
       ) : (
         <div className="space-y-4">
+          <Notice tone="info" title="Blob access is granted automatically">
+            Creating the account also assigns you the "{BLOB_ROLE}" role on it,
+            so you can read and write snapshots right away. This needs
+            permission to create role assignments (Owner or User Access
+            Administrator); if you don't have it, you'll be told which role to
+            request.
+          </Notice>
+          {setupError && (
+            <Notice tone="error" title="Couldn't load setup options">
+              {setupError}
+            </Notice>
+          )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <span className="label">Subscription</span>
@@ -497,21 +615,15 @@ function StorageSetupCard({
             </div>
           </div>
 
-          <div>
-            <label className="label" htmlFor="snap-container-new">
-              Blob container name
-            </label>
-            <input
-              id="snap-container-new"
-              className="input font-mono"
-              value={containerName}
-              onChange={(e) => setContainerName(e.target.value.toLowerCase())}
-              placeholder={DEFAULT_CONTAINER}
-            />
-            {containerErr && (
-              <p className="mt-0.5 text-xs text-deny">{containerErr}</p>
-            )}
-          </div>
+          <ContainerFields
+            idPrefix="snap-container-new"
+            snapshot={containerName}
+            history={historyContainerName}
+            onSnapshot={setContainerName}
+            onHistory={setHistoryContainerName}
+            snapshotErr={containerErr}
+            historyErr={historyErr}
+          />
 
           <div className="border border-line bg-ink-950 px-3 py-2 text-xs text-fg-muted">
             Provisions a <span className="text-fg">{skuName}</span> StorageV2
@@ -549,13 +661,18 @@ function StorageSetupCard({
                 !newAccountName.trim() ||
                 !!accountNameErr ||
                 !!containerErr ||
+                !!historyErr ||
                 submitting
               }
               onClick={handleCreateNew}
             >
-              <Plus size={14} />
+              {submitting ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Plus size={14} />
+              )}
               {submitting
-                ? 'Provisioning GRS storage (~20s)…'
+                ? 'Provisioning storage and granting access…'
                 : 'Create GRS storage account'}
             </button>
           </div>
@@ -645,6 +762,8 @@ export function Snapshots({
   const [showStorageModal, setShowStorageModal] = useState(false);
   const [snapshots, setSnapshots] = useState<PolicySnapshot[] | null>(null);
   const [error, setError] = useState('');
+  const [configError, setConfigError] = useState('');
+  const [accessNotice, setAccessNotice] = useState('');
   const [policyFilter, setPolicyFilter] = useState<string>('all');
   const [openSnapshots, setOpenSnapshots] = useState<Set<string>>(new Set());
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
@@ -658,16 +777,24 @@ export function Snapshots({
 
   const loadAll = useCallback(async () => {
     setError('');
+    setConfigError('');
+    let cfg: SnapshotStorageConfig | null;
     try {
-      const cfg = await window.api.getSnapshotStorageConfig();
-      setStorageConfig(cfg);
-      if (!cfg) {
-        setSnapshots([]);
-        return;
-      }
-      setSnapshots(null);
-      const list = await window.api.getSnapshots();
-      setSnapshots(list);
+      cfg = await window.api.getSnapshotStorageConfig();
+    } catch (err) {
+      setConfigError(errorMessage(err));
+      return;
+    }
+    setStorageConfig(cfg);
+    if (!cfg) {
+      setSnapshots([]);
+      return;
+    }
+    setSnapshots(null);
+    try {
+      setSnapshots(await window.api.getSnapshots());
+      // Reading worked, so any earlier "couldn't grant access" warning no longer applies.
+      setAccessNotice('');
     } catch (err) {
       setError(errorMessage(err));
       setSnapshots([]);
@@ -730,6 +857,28 @@ export function Snapshots({
     }
   };
 
+  if (configError) {
+    return (
+      <div className="p-6">
+        <Notice
+          tone="error"
+          title="Couldn't check centralized snapshot storage"
+          action={
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={() => void loadAll()}
+            >
+              Try again
+            </button>
+          }
+        >
+          {configError}
+        </Notice>
+      </div>
+    );
+  }
+
   if (storageConfig === undefined) {
     return (
       <div className="p-6">
@@ -765,6 +914,7 @@ export function Snapshots({
               currentConfig={null}
               onConfigured={(cfg) => {
                 setStorageConfig(cfg);
+                setAccessNotice(cfg.roleAssignmentError ?? '');
                 void loadAll();
               }}
             />
@@ -832,6 +982,16 @@ export function Snapshots({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        {accessNotice && (
+          <div className="mb-4">
+            <Notice
+              tone="error"
+              title="Blob access wasn't granted automatically"
+            >
+              {accessNotice}
+            </Notice>
+          </div>
+        )}
         {error && (
           <div className="mb-4">
             <Notice tone="error" title="Couldn't load policy snapshots">
@@ -839,7 +999,7 @@ export function Snapshots({
             </Notice>
           </div>
         )}
-        {!snapshots ? (
+        {error ? null : !snapshots ? (
           <Spinner label="Loading snapshots from Azure Blob Storage…" />
         ) : !snapshots.length ? (
           <EmptyState
@@ -1199,6 +1359,7 @@ export function Snapshots({
             onCancel={() => setShowStorageModal(false)}
             onConfigured={(cfg) => {
               setStorageConfig(cfg);
+              setAccessNotice(cfg.roleAssignmentError ?? '');
               setShowStorageModal(false);
               void loadAll();
             }}

@@ -10,6 +10,7 @@ const azure = vi.hoisted(() => ({
 const snapshotStorage = vi.hoisted(() => ({
   requireSnapshotStorageConfigured: vi.fn(),
   saveSnapshotToCentralStorage: vi.fn(),
+  saveCommitToCentralHistory: vi.fn(),
 }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const store = vi.hoisted(() => ({ state: {} as any }));
@@ -36,6 +37,8 @@ beforeEach(() => {
   });
   snapshotStorage.saveSnapshotToCentralStorage.mockReset();
   snapshotStorage.saveSnapshotToCentralStorage.mockResolvedValue(undefined);
+  snapshotStorage.saveCommitToCentralHistory.mockReset();
+  snapshotStorage.saveCommitToCentralHistory.mockResolvedValue(undefined);
 });
 vi.mock('./azure', () => ({
   ...azure,
@@ -568,5 +571,125 @@ describe('committing edits to existing groups', () => {
         collection: 'net-allow-core',
       }),
     ]);
+  });
+
+  it('adds every finished commit to the shared history', async () => {
+    const c = await freshCandidate();
+    c.stage(POLICY, edited(), running[0]);
+    azure.getRuleCollectionGroup.mockResolvedValue(running[0]);
+    azure.putRuleCollectionGroup.mockResolvedValue({});
+    azure.listRuleCollectionGroups.mockResolvedValue([edited()]);
+    const record = await c.commit([running[0].id], 'shared', 'alice', () => {});
+    expect(snapshotStorage.saveCommitToCentralHistory).toHaveBeenCalledTimes(1);
+    expect(
+      snapshotStorage.saveCommitToCentralHistory.mock.calls[0][0],
+    ).toMatchObject({ id: record.id, user: 'alice', description: 'shared' });
+    expect(record.historyError).toBeUndefined();
+  });
+
+  it('keeps a commit that could not be shared, and says so', async () => {
+    const c = await freshCandidate();
+    c.stage(POLICY, edited(), running[0]);
+    azure.getRuleCollectionGroup.mockResolvedValue(running[0]);
+    azure.putRuleCollectionGroup.mockResolvedValue({});
+    azure.listRuleCollectionGroups.mockResolvedValue([edited()]);
+    snapshotStorage.saveCommitToCentralHistory.mockRejectedValue(
+      new Error('history denied'),
+    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const record = await c.commit([running[0].id], 'x', 'me', () => {});
+    expect(record.results).toEqual([expect.objectContaining({ ok: true })]);
+    expect(record.historyError).toMatch(/history denied/);
+    expect(store.state.history).toHaveLength(1);
+    error.mockRestore();
+  });
+
+  it('never saves a snapshot for draft saves, only for commits', async () => {
+    const c = await freshCandidate();
+    c.stage(POLICY, edited(), running[0]);
+    c.save();
+    c.save();
+    expect(snapshotStorage.saveSnapshotToCentralStorage).not.toHaveBeenCalled();
+    azure.getRuleCollectionGroup.mockResolvedValue(running[0]);
+    azure.putRuleCollectionGroup.mockResolvedValue({});
+    azure.listRuleCollectionGroups.mockResolvedValue([edited()]);
+    await c.commit([running[0].id], 'one commit', 'me', () => {});
+    expect(snapshotStorage.saveSnapshotToCentralStorage).toHaveBeenCalledTimes(
+      1,
+    );
+  });
+
+  it('still finishes a commit Azure applied when its snapshot cannot be saved', async () => {
+    const c = await freshCandidate();
+    c.stage(POLICY, edited(), running[0]);
+    azure.getRuleCollectionGroup.mockResolvedValue(running[0]);
+    azure.putRuleCollectionGroup.mockResolvedValue({});
+    azure.listRuleCollectionGroups.mockResolvedValue([edited()]);
+    snapshotStorage.saveSnapshotToCentralStorage.mockRejectedValue(
+      new Error('Snapshot upload denied'),
+    );
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const record = await c.commit([running[0].id], 'x', 'me', () => {});
+    expect(record.results).toEqual([expect.objectContaining({ ok: true })]);
+    expect(record.snapshotError).toMatch(/Snapshot upload denied/);
+    expect(store.state.history).toHaveLength(1);
+    expect(store.state.activeCommits).toEqual([]);
+    expect(c.status().pending).toEqual([]);
+    error.mockRestore();
+  });
+
+  it('saves the snapshot of a commit that finished across a restart', async () => {
+    store.state.candidate = [
+      {
+        groupId: running[0].id,
+        policyId: POLICY,
+        policyName: 'fp',
+        stagedAt: '',
+        baseline: running[0],
+        candidate: edited(),
+      },
+    ];
+    store.state.activeCommits = [
+      {
+        user: 'me',
+        changeCount: 1,
+        results: [],
+        written: { [running[0].id.toLowerCase()]: edited() },
+        progress: {
+          commitId: 'c1',
+          startedAt: '',
+          description: 'resumed change',
+          index: 0,
+          total: 1,
+          groupName: 'Platform',
+          policyName: 'fp',
+          groups: [
+            {
+              groupId: running[0].id,
+              groupName: 'Platform',
+              policyName: 'fp',
+              action: 'update' as const,
+              state: 'updating' as const,
+            },
+          ],
+        },
+      },
+    ];
+    azure.getRuleCollectionGroup.mockResolvedValue(edited());
+    azure.listRuleCollectionGroups.mockResolvedValue([edited()]);
+    const c = await freshCandidate();
+    c.resume(() => {});
+    await vi.waitFor(() => expect(store.state.activeCommits).toEqual([]));
+    expect(snapshotStorage.saveSnapshotToCentralStorage).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(
+      snapshotStorage.saveSnapshotToCentralStorage.mock.calls[0][0],
+    ).toMatchObject({
+      policyId: POLICY,
+      user: 'me',
+      description: 'resumed change',
+      groups: [expect.objectContaining({ name: 'Platform' })],
+    });
   });
 });

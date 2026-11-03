@@ -22,7 +22,12 @@ import {
   ArrowRightLeft,
   Loader2,
   Download,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
+import { readSetting, writeSetting } from '../storage';
+
+const LIST_PANEL_KEY = 'ez-azfw-ruleman.groups-panel';
 import { EllipsisMenu, SelectMenu } from '../components/Dropdown';
 import { useResourceMenuItems } from '../components/resourceMenu';
 import { loadPolicyChain } from '../policyChain';
@@ -186,6 +191,13 @@ export function PolicyEditor({
   focus?: FlowHit;
 }) {
   const toast = useToast();
+  const [listOpen, setListOpen] = useState(
+    () => readSetting(LIST_PANEL_KEY) !== 'collapsed',
+  );
+  const toggleList = () => {
+    writeSetting(LIST_PANEL_KEY, listOpen ? 'collapsed' : 'open');
+    setListOpen(!listOpen);
+  };
   const [view, setView] = useState<PolicyView | null>(null);
   /** Parent (base) policies, nearest first. Their groups are processed before this policy's. */
   const [parents, setParents] = useState<PolicyView[]>([]);
@@ -303,8 +315,6 @@ export function PolicyEditor({
     [status, groupId],
   );
   const changes = pendingEntry?.changes ?? [];
-  /** The group's changes are being written to Azure right now. */
-  const committing = !!pendingEntry?.committing;
 
   /** Stages an edited copy of one of this policy's groups and updates the view. */
   const stageIn = async (
@@ -705,112 +715,145 @@ export function PolicyEditor({
   return (
     <RuleLookupsContext.Provider value={lookups}>
       <div className="flex h-full min-h-0">
-        <aside className="flex w-64 shrink-0 flex-col border-r border-line">
-          <div className="p-4 pb-3">
-            <span className="label">Policy</span>
-            <SelectMenu
-              label="Firewall policy"
-              widthClass="w-full"
-              value={policies.find((p) => sameResourceId(p.id, policyId))?.id}
-              onChange={onSelectPolicy}
-              options={policies.map((p) => ({
-                value: p.id,
-                label: p.name,
-                hint: `${p.firewallNames.length} ${p.firewallNames.length === 1 ? 'firewall' : 'firewalls'}`,
-              }))}
-            />
-          </div>
-
-          {view && (
-            <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 border-b border-line px-4 pb-4 text-xs">
-              {facts.map(([k, v]) => (
-                <Fragment key={k}>
-                  <dt className="text-fg-faint">{k}</dt>
-                  <dd className="min-w-0 text-fg-muted">{v}</dd>
-                </Fragment>
-              ))}
-            </dl>
+        <aside
+          className={`flex shrink-0 flex-col border-r border-line transition-[width] duration-150 ${listOpen ? 'w-64' : 'w-[52px]'}`}
+          aria-label="Policy and rule collection groups"
+        >
+          {!listOpen && (
+            <button
+              type="button"
+              onClick={toggleList}
+              aria-label="Show policy and rule collection groups"
+              aria-expanded={false}
+              title="Show policy and rule collection groups"
+              className="flex h-12 w-full items-center justify-center text-fg-muted hover:bg-ink-800 hover:text-fg"
+            >
+              <PanelLeftOpen size={18} />
+            </button>
           )}
-
-          <div className="flex items-center justify-between py-2 pl-4 pr-2">
-            <h2 className="text-sm font-semibold">Rule collection groups</h2>
-            <div className="flex">
-              <button
-                className="btn-ghost w-8 justify-center px-0"
-                onClick={() => setModal({ kind: 'newGroup' })}
-                disabled={!view}
-                title="New rule collection group"
-                aria-label="New rule collection group"
-              >
-                <Plus size={15} />
-              </button>
-              <button
-                className="btn-ghost w-8 justify-center px-0"
-                onClick={() => exportCsv('policy')}
-                disabled={!view}
-                title="Export all groups to CSV (including inherited ones and your draft)"
-                aria-label="Export all groups to CSV"
-              >
-                <Download size={14} />
-              </button>
-              <button
-                className="btn-ghost w-8 justify-center px-0"
-                onClick={load}
-                title="Reload from Azure"
-                aria-label="Reload from Azure"
-              >
-                <RefreshCw
-                  size={14}
-                  className={loading ? 'animate-spin' : ''}
-                />
-              </button>
-            </div>
-          </div>
-          <nav
-            aria-label="Rule collection groups"
-            className="min-h-0 flex-1 overflow-y-auto pb-3"
-          >
-            {view && (parents.length > 0 || view.groups.length > 0) && (
-              <p className="px-4 pb-2 text-[11px] leading-4 text-fg-faint">
-                Azure checks DNAT, then Network, then Application rules;
-                {parents.length > 0 && ' inherited groups first,'} groups and
-                collections by priority. First match wins.
-              </p>
-            )}
-            {view?.groups.map((g) => groupButton(g, false))}
-            {view && !view.groups.length && (
-              <p className="px-4 py-3 text-sm text-fg-faint">
-                No groups yet.{' '}
+          <div className={listOpen ? 'contents' : 'hidden'}>
+            <div className="p-4 pb-3">
+              <div className="flex items-center justify-between">
+                <span className="label !mb-0">Policy</span>
                 <button
-                  className="text-azure hover:underline"
-                  onClick={() => setModal({ kind: 'newGroup' })}
+                  type="button"
+                  onClick={toggleList}
+                  aria-label="Hide policy and rule collection groups"
+                  aria-expanded
+                  title="Hide policy and rule collection groups"
+                  className="btn-ghost -mr-2 h-7 w-7 justify-center px-0"
                 >
-                  Create one
+                  <PanelLeftClose size={16} />
                 </button>
-              </p>
-            )}
-            {parents.map((p) => (
-              <div key={p.policy.id} className="mt-3">
-                <h3
-                  className="flex items-center gap-1.5 px-4 pb-1 text-xs font-semibold text-fg-muted"
-                  title="Inherited groups are processed before this policy's, whatever their priority."
-                >
-                  <Lock size={11} /> Inherited from {p.policy.name}
-                </h3>
-                {p.groups.map((g) => groupButton(g, true))}
-                {!p.groups.length && (
-                  <p className="px-4 py-1 text-xs text-fg-faint">
-                    No rule collection groups.
-                  </p>
-                )}
               </div>
-            ))}
-            {parentError && (
-              <p className="mx-4 mt-3 border-l-2 border-candidate bg-candidate/10 px-2 py-1 text-xs text-fg-muted">
-                {parentError} Its rules are processed first but aren't shown.
-              </p>
+              <div className="mt-1">
+                <SelectMenu
+                  label="Firewall policy"
+                  widthClass="w-full"
+                  value={
+                    policies.find((p) => sameResourceId(p.id, policyId))?.id
+                  }
+                  onChange={onSelectPolicy}
+                  options={policies.map((p) => ({
+                    value: p.id,
+                    label: p.name,
+                    hint: `${p.firewallNames.length} ${p.firewallNames.length === 1 ? 'firewall' : 'firewalls'}`,
+                  }))}
+                />
+              </div>
+            </div>
+
+            {view && (
+              <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 border-b border-line px-4 pb-4 text-xs">
+                {facts.map(([k, v]) => (
+                  <Fragment key={k}>
+                    <dt className="text-fg-faint">{k}</dt>
+                    <dd className="min-w-0 text-fg-muted">{v}</dd>
+                  </Fragment>
+                ))}
+              </dl>
             )}
-          </nav>
+
+            <div className="flex items-center justify-between py-2 pl-4 pr-2">
+              <h2 className="text-sm font-semibold">Rule collection groups</h2>
+              <div className="flex">
+                <button
+                  className="btn-ghost w-8 justify-center px-0"
+                  onClick={() => setModal({ kind: 'newGroup' })}
+                  disabled={!view}
+                  title="New rule collection group"
+                  aria-label="New rule collection group"
+                >
+                  <Plus size={15} />
+                </button>
+                <button
+                  className="btn-ghost w-8 justify-center px-0"
+                  onClick={() => exportCsv('policy')}
+                  disabled={!view}
+                  title="Export all groups to CSV (including inherited ones and your draft)"
+                  aria-label="Export all groups to CSV"
+                >
+                  <Download size={14} />
+                </button>
+                <button
+                  className="btn-ghost w-8 justify-center px-0"
+                  onClick={load}
+                  title="Reload from Azure"
+                  aria-label="Reload from Azure"
+                >
+                  <RefreshCw
+                    size={14}
+                    className={loading ? 'animate-spin' : ''}
+                  />
+                </button>
+              </div>
+            </div>
+            <nav
+              aria-label="Rule collection groups"
+              className="min-h-0 flex-1 overflow-y-auto pb-3"
+            >
+              {view && (parents.length > 0 || view.groups.length > 0) && (
+                <p className="px-4 pb-2 text-[11px] leading-4 text-fg-faint">
+                  Azure checks DNAT, then Network, then Application rules;
+                  {parents.length > 0 && ' inherited groups first,'} groups and
+                  collections by priority. First match wins.
+                </p>
+              )}
+              {view?.groups.map((g) => groupButton(g, false))}
+              {view && !view.groups.length && (
+                <p className="px-4 py-3 text-sm text-fg-faint">
+                  No groups yet.{' '}
+                  <button
+                    className="text-azure hover:underline"
+                    onClick={() => setModal({ kind: 'newGroup' })}
+                  >
+                    Create one
+                  </button>
+                </p>
+              )}
+              {parents.map((p) => (
+                <div key={p.policy.id} className="mt-3">
+                  <h3
+                    className="flex items-center gap-1.5 px-4 pb-1 text-xs font-semibold text-fg-muted"
+                    title="Inherited groups are processed before this policy's, whatever their priority."
+                  >
+                    <Lock size={11} /> Inherited from {p.policy.name}
+                  </h3>
+                  {p.groups.map((g) => groupButton(g, true))}
+                  {!p.groups.length && (
+                    <p className="px-4 py-1 text-xs text-fg-faint">
+                      No rule collection groups.
+                    </p>
+                  )}
+                </div>
+              ))}
+              {parentError && (
+                <p className="mx-4 mt-3 border-l-2 border-candidate bg-candidate/10 px-2 py-1 text-xs text-fg-muted">
+                  {parentError} Its rules are processed first but aren't shown.
+                </p>
+              )}
+            </nav>
+          </div>
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col">
@@ -889,23 +932,14 @@ export function PolicyEditor({
                           </button>
                         )}
                       </span>
-                    ) : committing ? (
-                      <span
-                        className="inline-flex items-center gap-1.5 text-azure"
-                        title="Azure accepts the change first and then applies it to the firewall, which can take a few minutes. Progress is in the activity bell."
-                      >
-                        {' '}
-                        <Loader2 size={13} className="animate-spin" />
-                        Committing {changes.length}{' '}
-                        {changes.length === 1 ? 'change' : 'changes'} to Azure…
-                      </span>
                     ) : current.isNew ? (
                       <span className="text-candidate">
                         {' '}
                         Not in Azure yet: commit to create it.
                       </span>
                     ) : (
-                      current.staged && (
+                      current.staged &&
+                      !pendingEntry?.committing && (
                         <span className="text-candidate">
                           {' '}
                           {changes.length} uncommitted{' '}

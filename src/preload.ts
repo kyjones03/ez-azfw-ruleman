@@ -33,12 +33,22 @@ const api: AzNetApi = {
   commit: (groupIds, description) => call(IPC.commit, groupIds, description),
   resumeCommit: () => call(IPC.resumeCommit),
   getHistory: () => call(IPC.getHistory),
+  getCentralHistory: () => call(IPC.getCentralHistory),
   getSnapshots: () => call(IPC.getSnapshots),
   restoreSnapshot: (snapshotId) => call(IPC.restoreSnapshot, snapshotId),
   getSnapshotStorageConfig: () => call(IPC.getSnapshotStorageConfig),
   listSnapshotStorageAccounts: () => call(IPC.listSnapshotStorageAccounts),
-  setSnapshotStorageAccount: (storageAccountId, containerName) =>
-    call(IPC.setSnapshotStorageAccount, storageAccountId, containerName),
+  setSnapshotStorageAccount: (
+    storageAccountId,
+    containerName,
+    historyContainerName,
+  ) =>
+    call(
+      IPC.setSnapshotStorageAccount,
+      storageAccountId,
+      containerName,
+      historyContainerName,
+    ),
   createSnapshotStorageAccount: (request) =>
     call(IPC.createSnapshotStorageAccount, request),
   openInPortal: (resourceId) => call(IPC.openInPortal, resourceId),

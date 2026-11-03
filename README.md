@@ -2,7 +2,7 @@
 
 A cross-platform desktop app for managing [Azure Firewall](https://learn.microsoft.com/azure/firewall/overview) policy rules with a safe **draft → review → commit** workflow.
 
-Instead of editing rules live in the Azure portal, you stage changes locally as a _candidate_, review the risk and the exact diff, and then commit them to Azure in one step — with a local history of every commit.
+Instead of editing rules live in the Azure portal, you stage changes locally as a _candidate_, review the risk and the exact diff, and then commit them to Azure in one step — with a shared history of every commit.
 
 [![Latest release](https://img.shields.io/github/v/release/samsmith-MSFT/ez-azfw-ruleman?label=download&sort=semver)](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases/latest)
 [![CI](https://github.com/samsmith-MSFT/ez-azfw-ruleman/actions/workflows/ci.yml/badge.svg)](https://github.com/samsmith-MSFT/ez-azfw-ruleman/actions/workflows/ci.yml)
@@ -18,8 +18,8 @@ Instead of editing rules live in the Azure portal, you stage changes locally as 
 - **Draft and commit** — changes are staged in a local candidate that survives restarts. Nothing is sent to Azure until you commit.
 - **Review** — see a per-group diff and a risk assessment (e.g. overly broad sources, destinations, or ports) before committing. Concurrent changes made in Azure are detected using ETags.
 - **Policy snapshots and rollback** — dated snapshots are captured automatically whenever a policy is loaded, updated, or committed, with collapsible Rule Collection Group → Rule Collection → Rules views and one-click rollback to any former state.
-- **Commit history** — every commit is recorded locally with what changed and its outcome.
-- **Flow tester** — check which rule would match a given source, destination, protocol, and port.
+- **Commit history** — every commit is saved to the same shared Azure Blob Storage account as the snapshots, so you and your teammates can see who made what change and its outcome. Commits that couldn't be saved there still show on the device that made them.
+- **Flow tester** — check which rule would match a given source, destination, protocol, and port. Optionally pick the destination's web category (from the portal's Web Category Check) so web category rules can be decided.
 - **CSV import and export** — bulk-edit rules in a spreadsheet and bring them back in.
 - **Deploy new firewalls** — a guided wizard deploys a new Azure Firewall and Firewall Policy into a new or existing virtual network, or a Virtual WAN hub, using an ARM deployment.
 
@@ -76,12 +76,14 @@ The app only requests the Azure Resource Manager scope (`https://management.azur
 
 Access is governed by Azure RBAC on your own account:
 
-| Task                                             | Minimum role                                                                                                                                                |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Browse firewalls, policies, rules, and IP Groups | **Reader** on the subscriptions or resource groups                                                                                                          |
-| Commit rule changes                              | **Network Contributor** on the firewall policy (or a custom role with `Microsoft.Network/firewallPolicies/ruleCollectionGroups/read` and `/write`)          |
-| Reference IP Groups in rules                     | `Microsoft.Network/ipGroups/join/action` (included in Network Contributor) on the IP Groups                                                                 |
-| Deploy a new firewall                            | **Contributor** (or Network Contributor plus deployment rights) on the target resource group; on the subscription if the wizard creates new resource groups |
+| Task                                                              | Minimum role                                                                                                                                                                 |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Browse firewalls, policies, rules, and IP Groups                  | **Reader** on the subscriptions or resource groups                                                                                                                           |
+| Commit rule changes                                               | **Network Contributor** on the firewall policy (or a custom role with `Microsoft.Network/firewallPolicies/ruleCollectionGroups/read` and `/write`)                           |
+| Reference IP Groups in rules                                      | `Microsoft.Network/ipGroups/join/action` (included in Network Contributor) on the IP Groups                                                                                  |
+| Deploy a new firewall                                             | **Contributor** (or Network Contributor plus deployment rights) on the target resource group; on the subscription if the wizard creates new resource groups                  |
+| View, save, and roll back policy snapshots and the commit history | **Storage Blob Data Contributor** on the shared storage account (it covers the snapshot and commit-history containers). Owner and Contributor don't include blob data access |
+| Create a snapshot storage account in the app                      | **Contributor** to create it, plus **Owner** or **User Access Administrator** so the app can assign you Storage Blob Data Contributor on it                                  |
 
 ## Where your data is stored
 
@@ -93,7 +95,7 @@ Everything the app keeps is stored locally in your user profile, in an `ez-azfw-
 | macOS   | `~/Library/Application Support/ez-azfw-ruleman` |
 | Linux   | `~/.config/ez-azfw-ruleman`                     |
 
-- `ez-azfw-ruleman-state.json` — draft (candidate) changes, policy snapshots, and commit history.
+- `ez-azfw-ruleman-state.json` — draft (candidate) changes, your recent commits, and storage settings. Policy snapshots and the shared commit history live in Azure Blob Storage, not on disk.
 - `msal-cache.bin` — the sign-in token cache, **encrypted** with the OS key store (DPAPI on Windows, Keychain on macOS, libsecret on Linux). If no secure key store is available (e.g. Linux without a keyring), tokens are never written to disk and you sign in again each session.
 
 Delete the folder to reset the app. No telemetry is collected; the app talks only to Microsoft Entra ID and Azure Resource Manager.

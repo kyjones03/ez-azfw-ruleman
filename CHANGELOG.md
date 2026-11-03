@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-03
+
+### Added
+
+- **Shared commit history.** Every commit is saved to the same Azure Blob Storage account as the snapshots, so you and your teammates can see who made what change. It uses its own blob container, which must be different from the snapshot container: the setup form checks this, and the app refuses to save or read history from the snapshot container. Commits that couldn't be saved there still show on the device that made them, marked "This device only".
+- The "Rule collection groups" panel on the Rules page can be collapsed to give the rules more room; the app remembers your choice.
+- Creating a snapshot storage account now assigns you the **Storage Blob Data Contributor** role on it, with a spinner on the button while it deploys. If you can't create role assignments, a notice on the Snapshots tab tells you to assign yourself that role before you can view snapshots.
+- Choosing an existing storage account shows a banner explaining that you need blob data access (Storage Blob Data Contributor) on it.
+- **Flow tester web categories.** Azure has no API that maps a site to its web category, so the Flow tester has an optional "Destination web categories" field. Pick the category you found with Web Category Check in the portal and web category rules are matched against it instead of showing as "unsure".
+
+### Changed
+
+- Snapshot blobs are now read and written with your own Azure sign-in (Microsoft Entra ID) instead of storage account keys.
+- A commit's snapshot is also saved when the commit finishes after the app was restarted. If saving it fails, the commit is still recorded and you're told the snapshot wasn't saved.
+- Committing now checks that you can access snapshot storage before anything is written to Azure.
+- The Rules page no longer shows "Committing N changes to Azure…" under the group name; the progress bar at the bottom of the app already shows it.
+
+### Fixed
+
+- Blob access failures now report Azure's error code and say whether the cause is a missing role, storage networking (firewall or disabled public access), or a rejected sign-in, instead of always asking you to assign a role.
+- The Snapshots tab failed with a Resource Graph `BadRequest` when listing storage accounts, and kept showing a loading spinner next to the error.
+- Errors loading storage configuration, subscriptions, regions or snapshots are now shown instead of an endless spinner, a disabled button, or a misleading "no snapshots" message.
+- Snapshot lists now include every page of results, always show each policy's newest snapshot, and skip malformed snapshot files instead of crashing the view.
+
 ## [1.2.0] - 2026-11-02
 
 ### Added
@@ -43,7 +67,8 @@ Initial public release.
 - Encrypted, OS key store–backed token cache.
 - Portable, no-install executables for Windows (x64 and Arm64 `.exe`), macOS (zipped `.app`, arm64 and x64), and Linux (x64 AppImage).
 
-[Unreleased]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.0.0...v1.1.0

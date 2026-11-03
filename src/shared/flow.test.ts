@@ -311,6 +311,47 @@ describe('evaluateFlow', () => {
     expect(flow('10.15.1.0').maybes).toEqual([]);
   });
 
+  it('decides web category rules from the categories the user supplies', () => {
+    const app = (name: string, webCategories: string[]): ApplicationRule => ({
+      ruleType: 'ApplicationRule',
+      name,
+      protocols: [{ protocolType: 'Https', port: 443 }],
+      sourceAddresses: ['*'],
+      webCategories,
+    });
+    const l = layer([
+      group('g', 100, [
+        filter('deny-cats', 100, 'Deny', [app('deny-gambling', ['Gambling'])]),
+        filter('allow-cats', 200, 'Allow', [
+          app('allow-news', ['NewsAndMedia']),
+        ]),
+      ]),
+    ]);
+    const flow = (webCategories: string[]) =>
+      evaluateFlow(
+        {
+          source: '10.1.2.3',
+          destination: 'www.example.com',
+          protocol: 'TCP',
+          port: 443,
+          webCategories,
+        },
+        [l],
+      );
+    const news = flow(['newsandmedia']);
+    expect(news.verdict).toBe('Allow');
+    expect(news.winner?.rule).toBe('allow-news');
+    expect(news.maybes).toEqual([]);
+    const gambling = flow(['Gambling']);
+    expect(gambling.verdict).toBe('Deny');
+    expect(gambling.winner?.rule).toBe('deny-gambling');
+    const other = flow(['Travel']);
+    expect(other.verdict).toBe('default-deny');
+    expect(other.maybes).toEqual([]);
+    // No categories supplied: still unsure.
+    expect(flow([]).maybes.map((m) => m.rule)).toEqual(['allow-news']);
+  });
+
   it('handles ICMP without ports', () => {
     const l = layer([
       group('g', 100, [

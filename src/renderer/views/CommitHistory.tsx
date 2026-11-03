@@ -3,29 +3,55 @@ import {
   History as HistoryIcon,
   ChevronRight,
   CheckCircle2,
+  Database,
+  Settings2,
   XCircle,
   AlertTriangle,
 } from 'lucide-react';
 import { Badge, EmptyState, Notice, Spinner } from '../components/ui';
 import { ChangeList, ChangeSummary } from '../components/ChangeList';
 import { errorMessage } from '../components/Toast';
-import type { CommitRecord } from '../../shared/types';
+import type {
+  CommitHistoryEntry,
+  SnapshotStorageConfig,
+} from '../../shared/types';
 
-export function CommitHistory({ refreshKey }: { refreshKey: number }) {
-  const [records, setRecords] = useState<CommitRecord[] | null>(null);
+const DEFAULT_HISTORY_CONTAINER = 'ez-azfw-history';
+
+export function CommitHistory({
+  refreshKey,
+  onOpenStorage,
+}: {
+  refreshKey: number;
+  /** Opens the Snapshots tab, where the shared storage (and the history container) is set up. */
+  onOpenStorage: () => void;
+}) {
+  const [records, setRecords] = useState<CommitHistoryEntry[] | null>(null);
   const [error, setError] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const [storage, setStorage] = useState<SnapshotStorageConfig | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     window.api
-      .getHistory()
+      .getSnapshotStorageConfig()
+      .then((cfg) => !cancelled && setStorage(cfg))
+      .catch(() => !cancelled && setStorage(null));
+    window.api
+      .getCentralHistory()
       .then((history) => {
         if (cancelled) return;
         setRecords(history);
         setError('');
       })
-      .catch((err) => !cancelled && setError(errorMessage(err)));
+      .catch(async (err) => {
+        if (cancelled) return;
+        // Shared history isn't reachable: still show what this device recorded.
+        setError(errorMessage(err));
+        const local = await window.api.getHistory().catch(() => []);
+        if (!cancelled)
+          setRecords(local.map((r) => ({ ...r, localOnly: true })));
+      });
     return () => {
       cancelled = true;
     };
@@ -34,32 +60,66 @@ export function CommitHistory({ refreshKey }: { refreshKey: number }) {
   if (!records)
     return (
       <div className="p-6">
-        {error ? (
-          <Notice tone="error" title="Couldn't load the commit history">
-            {error}
-          </Notice>
-        ) : (
-          <Spinner label="Loading history…" />
-        )}
+        <Spinner label="Loading shared commit history…" />
       </div>
     );
+  const problem = error && (
+    <div className="px-6 pt-4">
+      <Notice
+        tone="error"
+        title="Couldn't load the shared commit history"
+        action={
+          <button type="button" className="btn-outline" onClick={onOpenStorage}>
+            <Settings2 size={14} />
+            Open storage settings
+          </button>
+        }
+      >
+        {error}
+      </Notice>
+    </div>
+  );
   if (!records.length) {
     return (
-      <EmptyState icon={<HistoryIcon size={22} />} title="No commits yet">
-        Commits made from this device are listed here with who made them and
-        what changed.
-      </EmptyState>
+      <div className="flex h-full flex-col">
+        {problem}
+        <EmptyState icon={<HistoryIcon size={22} />} title="No commits yet">
+          Commits made by you or your teammates are listed here with who made
+          them and what changed.
+        </EmptyState>
+      </div>
     );
   }
 
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-line px-6 pb-4 pt-5">
-        <h1 className="text-xl font-semibold">Commit history</h1>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h1 className="text-xl font-semibold">Commit history</h1>
+          {storage && (
+            <span className="inline-flex items-center gap-1.5 rounded border border-line bg-ink-900 px-2.5 py-0.5 text-xs text-fg-muted">
+              <Database size={12} className="text-azure" />
+              <span className="font-mono text-fg">
+                {storage.storageAccountName}/
+                {storage.historyContainerName ?? DEFAULT_HISTORY_CONTAINER}
+              </span>
+            </span>
+          )}
+          <button
+            type="button"
+            className="btn-ghost h-7 px-2 text-xs"
+            onClick={onOpenStorage}
+          >
+            <Settings2 size={13} />
+            Change storage
+          </button>
+        </div>
         <p className="mt-1 text-sm text-fg-muted">
-          Commits made from this device, newest first.
+          Commits made by you and your teammates, saved in shared Azure Blob
+          Storage, newest first.
         </p>
       </div>
+      {problem}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <table className="w-full table-fixed text-left text-sm">
           <thead className="sticky top-0 bg-ink-900 text-xs text-fg-muted">
@@ -125,10 +185,18 @@ export function CommitHistory({ refreshKey }: { refreshKey: number }) {
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <span className="flex gap-1">
+                      <span className="flex flex-wrap gap-1">
                         {ok > 0 && <Badge tone="green">{ok} succeeded</Badge>}
                         {failed > 0 && (
                           <Badge tone="red">{failed} failed</Badge>
+                        )}
+                        {r.localOnly && (
+                          <Badge
+                            tone="neutral"
+                            title="Only recorded on this device: it isn't in the shared history."
+                          >
+                            This device only
+                          </Badge>
                         )}
                       </span>
                     </td>

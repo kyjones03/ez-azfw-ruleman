@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { SelectMenu } from '../components/Dropdown';
+import { TokenPicker, type PickerOption } from '../components/TokenPicker';
+import { parseList } from '../../shared/rules';
 import {
   evaluateFlow,
   isIpv4,
@@ -227,6 +229,7 @@ export function FlowTester({
   const [destination, setDestination] = useState('');
   const [protocol, setProtocol] = useState<FlowProtocol>('TCP');
   const [port, setPort] = useState('443');
+  const [categories, setCategories] = useState('');
 
   const sourceOk = isIpv4(source.trim());
   const dest = destination
@@ -239,7 +242,17 @@ export function FlowTester({
     protocol === 'ICMP' ||
     (Number.isInteger(portNum) && portNum >= 1 && portNum <= 65535);
   const ready = sourceOk && destOk && portOk;
-  const { ipGroupMembers } = useRuleLookups();
+  const { ipGroupMembers, lookups, known, loading } = useRuleLookups();
+  const categoryOptions = useMemo<PickerOption[]>(
+    () =>
+      (lookups?.webCategories ?? []).map((c) => ({
+        value: c.name,
+        label: c.name,
+        hint: c.group,
+      })),
+    [lookups],
+  );
+  const webCategories = useMemo(() => parseList(categories), [categories]);
 
   const result = useMemo(() => {
     if (!ready) return undefined;
@@ -248,9 +261,19 @@ export function FlowTester({
       destination: dest,
       protocol,
       port: protocol === 'ICMP' ? undefined : portNum,
+      webCategories,
     };
     return evaluateFlow(flow, layers, ipGroupMembers);
-  }, [ready, source, dest, protocol, portNum, layers, ipGroupMembers]);
+  }, [
+    ready,
+    source,
+    dest,
+    protocol,
+    portNum,
+    webCategories,
+    layers,
+    ipGroupMembers,
+  ]);
 
   const verdict = result?.verdict;
   const tone =
@@ -309,6 +332,33 @@ export function FlowTester({
             aria-invalid={!portOk}
           />
         </label>
+      </div>
+
+      <div className="mt-3">
+        <span className="label">Destination web categories (optional)</span>
+        <TokenPicker
+          value={categories}
+          onChange={setCategories}
+          options={categoryOptions}
+          ariaLabel="Destination web categories"
+          placeholder={
+            loading && !categoryOptions.length
+              ? 'Loading from Azure…'
+              : 'Pick the category Azure assigns to the destination'
+          }
+          loading={loading}
+          allowCustom={!known.webCategories}
+          emptyText={
+            known.webCategories
+              ? 'No matches'
+              : "This list couldn't be loaded from Azure"
+          }
+        />
+        <p className="mt-1 text-xs text-fg-faint">
+          Azure can't look up a site's category from here. Find it with Web
+          Category Check in the portal (Firewall Policy → Settings), then pick
+          it so web category rules can be matched instead of showing as unsure.
+        </p>
       </div>
 
       {!result ? (

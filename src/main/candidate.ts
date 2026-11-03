@@ -13,6 +13,7 @@ import {
 } from './azure';
 import {
   requireSnapshotStorageConfigured,
+  saveCommitToCentralHistory,
   saveSnapshotToCentralStorage,
 } from './snapshotStorage';
 import {
@@ -30,6 +31,7 @@ import type {
   CommitGroupState,
   CommitProgress,
   CommitRecord,
+  CommitResult,
   GroupView,
   PolicySnapshot,
   RuleCollectionGroup,
@@ -532,8 +534,11 @@ export class Candidate {
         fail(describeAzureError(err));
       }
     }
-    await this.captureCommittedSnapshots(selected, active);
-    return this.finish(active, emit);
+    const snapshotError = await this.captureCommittedSnapshots(active);
+    const record = this.finish(active, emit, snapshotError);
+    const historyError = await shareCommitRecord(record);
+    if (historyError) record.historyError = historyError;
+    return record;
   }
 
   /** Emits progress and keeps it on disk, so a commit interrupted by closing the app can resume. */
@@ -557,7 +562,11 @@ export class Candidate {
     };
   }
 
-  private finish(active: ActiveCommit, emit: () => void): CommitRecord {
+  private finish(
+    active: ActiveCommit,
+    emit: () => void,
+    snapshotError?: string,
+  ): CommitRecord {
     const { progress } = active;
     const record: CommitRecord = {
       id: progress.commitId,
@@ -566,6 +575,7 @@ export class Candidate {
       description: progress.description,
       changeCount: active.changeCount,
       results: active.results,
+      ...(snapshotError ? { snapshotError } : {}),
     };
     progress.done = true;
     emit();
@@ -582,55 +592,68 @@ export class Candidate {
     return record;
   }
 
+  /**
+   * Saves one cumulative snapshot per policy once a commit has finished, from what the commit
+   * itself wrote. Runs for completed and resumed commits alike (never for draft saves), and a
+   * failure is reported rather than thrown: the change is already in Azure and the commit
+   * must still be finalized. Returns the failure message, if any.
+   */
   private async captureCommittedSnapshots(
-    selected: StagedGroup[],
     active: ActiveCommit,
-  ): Promise<void> {
-    const succeededIds = new Set(
-      active.results.filter((r) => r.ok).map((r) => key(r.groupId)),
-    );
-    if (!succeededIds.size) return;
-
-    const byPolicy = new Map<string, StagedGroup[]>();
-    for (const s of selected) {
-      if (!succeededIds.has(key(s.groupId))) continue;
-      const pk = key(s.policyId);
-      byPolicy.set(pk, [...(byPolicy.get(pk) ?? []), s]);
+  ): Promise<string | undefined> {
+    const byPolicy = new Map<
+      string,
+      { policyId: string; results: CommitResult[] }
+    >();
+    for (const r of active.results) {
+      if (!r.ok) continue;
+      const policyId = r.groupId.replace(/\/ruleCollectionGroups\/[^/]+$/i, '');
+      const entry = byPolicy.get(key(policyId)) ?? { policyId, results: [] };
+      entry.results.push(r);
+      byPolicy.set(key(policyId), entry);
     }
 
-    for (const groups of byPolicy.values()) {
-      const { policyId } = groups[0];
-      let liveGroups: RuleCollectionGroup[] | undefined;
+    const errors: string[] = [];
+    for (const { policyId, results } of byPolicy.values()) {
       try {
-        liveGroups = await listRuleCollectionGroups(policyId);
-      } catch {
-        // Fall back to merging the known running groups with the committed groups.
-      }
-      if (!liveGroups || !liveGroups.length) {
-        const known = this.lastKnownRunning.get(key(policyId)) ?? [];
-        const merged = new Map<string, RuleCollectionGroup>();
-        for (const g of known) merged.set(key(g.id), g);
-        for (const s of groups) {
-          const written = active.written[key(s.groupId)] ?? s.candidate;
-          merged.set(key(s.groupId), written);
+        let liveGroups: RuleCollectionGroup[] | undefined;
+        try {
+          liveGroups = await listRuleCollectionGroups(policyId);
+        } catch {
+          // Fall back to merging the known running groups with the committed groups.
         }
-        liveGroups = [...merged.values()];
-      } else {
+        const merged = new Map<string, RuleCollectionGroup>(
+          (liveGroups?.length
+            ? liveGroups
+            : (this.lastKnownRunning.get(key(policyId)) ?? [])
+          ).map((g) => [key(g.id), g]),
+        );
         // Ensure the newly written state is reflected even if list lags behind get.
-        const merged = new Map(liveGroups.map((g) => [key(g.id), g]));
-        for (const s of groups) {
-          const written = active.written[key(s.groupId)] ?? s.candidate;
-          merged.set(key(s.groupId), written);
+        for (const r of results) {
+          const written = active.written[key(r.groupId)];
+          if (written) merged.set(key(r.groupId), written);
         }
-        liveGroups = [...merged.values()];
+        const names = results.map((r) => r.groupName).join(', ');
+        await recordCommittedPolicySnapshot(policyId, [...merged.values()], {
+          user: active.user,
+          description:
+            active.progress.description ||
+            summarizeCommitChanges(
+              names,
+              results.flatMap((r) => r.changes ?? []),
+            ),
+        });
+      } catch (err) {
+        console.error(
+          `[commit] Couldn't save the snapshot for ${resourceName(policyId)}:`,
+          err,
+        );
+        errors.push(`${resourceName(policyId)}: ${describeAzureError(err)}`);
       }
-      const allChanges = groups.flatMap((g) => changesOf(g));
-      const fallbackDesc = summarizeCommitChanges(groups, allChanges);
-      await recordCommittedPolicySnapshot(policyId, liveGroups, {
-        user: active.user,
-        description: active.progress.description || fallbackDesc,
-      });
     }
+    return errors.length
+      ? `The commit succeeded, but its snapshot wasn't saved. ${errors.join('; ')}`
+      : undefined;
   }
 
   /**
@@ -667,7 +690,9 @@ export class Candidate {
     void (async () => {
       try {
         for (const g of open) await this.resumeGroup(active, g, emit);
-        this.finish(active, emit);
+        // A commit that finished across a restart still gets its snapshot.
+        const snapshotError = await this.captureCommittedSnapshots(active);
+        await shareCommitRecord(this.finish(active, emit, snapshotError));
       } catch (err) {
         console.error(
           `[commit] Couldn't finish resuming commit ${active.progress.commitId}:`,
@@ -718,6 +743,24 @@ export class Candidate {
   }
 }
 
+/**
+ * Adds a finished commit to the shared history. Like snapshots, this never undoes or blocks the
+ * commit: a failure is returned as a message for the user instead.
+ */
+async function shareCommitRecord(
+  record: CommitRecord,
+): Promise<string | undefined> {
+  try {
+    await saveCommitToCentralHistory(record);
+  } catch (err) {
+    console.error(
+      "[commit] Couldn't add the commit to the shared history:",
+      err,
+    );
+    return `The commit succeeded, but it wasn't added to the shared commit history. ${describeAzureError(err)}`;
+  }
+}
+
 const FINAL_STATES: CommitGroupState[] = ['succeeded', 'failed', 'conflict'];
 /** How long to wait for Azure to finish applying a change before giving up. */
 const SETTLE_TIMEOUT_MS = 20 * 60_000;
@@ -732,10 +775,9 @@ function isBusy(err: unknown): boolean {
 }
 
 function summarizeCommitChanges(
-  groups: StagedGroup[],
+  groupNames: string,
   changes: ChangeItem[],
 ): string {
-  const groupNames = groups.map((g) => g.candidate.name).join(', ');
   if (!changes.length) return `Committed ${groupNames}`;
   const added = changes.filter((c) => c.kind === 'added').length;
   const modified = changes.filter((c) => c.kind === 'modified').length;

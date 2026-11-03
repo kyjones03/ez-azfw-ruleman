@@ -1,7 +1,7 @@
 {
   "name": "ez-azfw-ruleman",
   "productName": "EZ AzFW Rule Manager",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Desktop app for managing Azure Firewall policy rules with a draft, review and commit workflow",
   "keywords": [

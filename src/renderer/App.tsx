@@ -624,7 +624,12 @@ export default function App() {
                   }}
                 />
               )}
-              {tab === 'history' && <CommitHistory refreshKey={reloadKey} />}
+              {tab === 'history' && (
+                <CommitHistory
+                  refreshKey={reloadKey}
+                  onOpenStorage={() => setTab('snapshots')}
+                />
+              )}
             </>
           )}
         </main>
@@ -664,6 +669,8 @@ export default function App() {
                     ? `${failed} of ${r.results.length} groups failed to commit. Open the activity bell for details.`
                     : 'Committed to Azure.',
                 );
+                if (r.snapshotError) toast('error', r.snapshotError);
+                if (r.historyError) toast('error', r.historyError);
               })
               .catch((err) => toast('error', errorMessage(err)))
               .finally(() =>
