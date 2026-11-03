@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Windows installer.** Each release now includes a per-user installer (`-setup.exe`) with Start menu and desktop shortcuts and an uninstaller, alongside the portable `.exe`. Your data is shared between the two and is kept when you uninstall.
+
 ### Changed
 
 - Updated React to 19, TypeScript to 7 and the formatter (oxfmt), and the GitHub Actions used by CI and releases to v7.

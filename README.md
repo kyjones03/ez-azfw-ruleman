@@ -27,17 +27,19 @@ Instead of editing rules live in the Azure portal, you stage changes locally as 
 
 ## Download and run
 
-Download the file for your platform from the [latest release](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases/latest). Every build is portable: there is nothing to install. Just download it and run it.
+Download the file for your platform from the [latest release](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases/latest). On Windows, the **installer** adds Start menu and desktop shortcuts and an uninstaller. The Windows portable file and the macOS and Linux builds need no installation: download and run them.
 
-| Platform              | File                                              | How to run                                    |
-| --------------------- | ------------------------------------------------- | --------------------------------------------- |
-| Windows (x64)         | `ez-azfw-ruleman-<version>-win-x64.exe`           | Double-click it                               |
-| Windows (Arm64)       | `ez-azfw-ruleman-<version>-win-arm64.exe`         | Double-click it                               |
-| macOS (Apple silicon) | `ez-azfw-ruleman-<version>-mac-arm64.zip`         | Unzip, then open **EZ AzFW Rule Manager.app** |
-| macOS (Intel)         | `ez-azfw-ruleman-<version>-mac-x64.zip`           | Unzip, then open **EZ AzFW Rule Manager.app** |
-| Linux (x64)           | `ez-azfw-ruleman-<version>-linux-x86_64.AppImage` | `chmod +x` it, then run it                    |
+| Platform                   | File                                              | How to run                                    |
+| -------------------------- | ------------------------------------------------- | --------------------------------------------- |
+| Windows (x64), installer   | `ez-azfw-ruleman-<version>-win-x64-setup.exe`     | Run it and follow the prompts                 |
+| Windows (Arm64), installer | `ez-azfw-ruleman-<version>-win-arm64-setup.exe`   | Run it and follow the prompts                 |
+| Windows (x64), portable    | `ez-azfw-ruleman-<version>-win-x64.exe`           | Double-click it                               |
+| Windows (Arm64), portable  | `ez-azfw-ruleman-<version>-win-arm64.exe`         | Double-click it                               |
+| macOS (Apple silicon)      | `ez-azfw-ruleman-<version>-mac-arm64.zip`         | Unzip, then open **EZ AzFW Rule Manager.app** |
+| macOS (Intel)              | `ez-azfw-ruleman-<version>-mac-x64.zip`           | Unzip, then open **EZ AzFW Rule Manager.app** |
+| Linux (x64)                | `ez-azfw-ruleman-<version>-linux-x86_64.AppImage` | `chmod +x` it, then run it                    |
 
-The Windows executable unpacks itself to a temporary folder each time it starts, so it takes a few seconds longer to open than an installed app. Your drafts, history and sign-in are kept in your user profile (see [Where your data is stored](#where-your-data-is-stored)), not next to the executable, so you can move or replace it with a newer version freely.
+The installer is per-user, so it doesn't need administrator rights, and you can remove it from **Settings** → **Apps** like any other app. Uninstalling keeps your data. The portable Windows executable unpacks itself to a temporary folder when it starts, so it takes a few seconds longer to open. Your drafts, history and sign-in are kept in your user profile (see [Where your data is stored](#where-your-data-is-stored)), not next to the executable, so you can switch between the installer and portable builds, or replace either with a newer version, freely.
 
 ### First launch on each OS
 
@@ -111,7 +113,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 - **Scope:** only the Windows executables (`.exe`) in [GitHub releases](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases), built from this repository by the [Release workflow](.github/workflows/release.yml). Nothing built elsewhere is signed.
 - **Authors, reviewers and approvers:** [samsmith-MSFT](https://github.com/samsmith-MSFT). Every release needs manual approval before it is signed.
 - **Privacy policy:** this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. It sends nothing to the maintainers. Its only network connections are to Microsoft Entra ID, Azure Resource Manager and the Azure Blob Storage account you configure, using your own sign-in (see [Where your data is stored](#where-your-data-is-stored)).
-- **No system changes:** the app is portable. It doesn't install anything or change system settings, and you uninstall it by deleting the file and the data folder above.
+- **System changes:** the portable build installs nothing and changes no system settings; delete the file and the data folder above to remove it. The Windows installer adds only a per-user Start menu entry, a desktop shortcut and an uninstall entry, and its uninstaller removes them.
 
 ## Development
 
@@ -128,17 +130,17 @@ Set `EZAZFW_DEVTOOLS=1` to open the developer tools on start in development.
 
 ### Scripts
 
-| Script              | Description                                                                        |
-| ------------------- | ---------------------------------------------------------------------------------- |
-| `npm start`         | Run the app in development with hot reload                                         |
-| `npm run lint`      | Lint with oxlint and check formatting with oxfmt                                   |
-| `npm run lint:fix`  | Fix lint issues and format                                                         |
-| `npm run typecheck` | Type-check with TypeScript                                                         |
-| `npm test`          | Run unit tests with Vitest                                                         |
-| `npm run verify`    | Lint, type-check, and test (what CI runs)                                          |
-| `npm run package`   | Build the app for the current platform into `out/`                                 |
-| `npm run dist`      | Build the portable executable into `out/release/` (add `-- --arch x64` or `arm64`) |
-| `npm run icons`     | Regenerate app icons from `assets/icons/logo.svg`                                  |
+| Script              | Description                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm start`         | Run the app in development with hot reload                                                                                                    |
+| `npm run lint`      | Lint with oxlint and check formatting with oxfmt                                                                                              |
+| `npm run lint:fix`  | Fix lint issues and format                                                                                                                    |
+| `npm run typecheck` | Type-check with TypeScript                                                                                                                    |
+| `npm test`          | Run unit tests with Vitest                                                                                                                    |
+| `npm run verify`    | Lint, type-check, and test (what CI runs)                                                                                                     |
+| `npm run package`   | Build the app for the current platform into `out/`                                                                                            |
+| `npm run dist`      | Build the Windows installer and portable executable, the Linux AppImage or the macOS zip into `out/release/` (add `-- --arch x64` or `arm64`) |
+| `npm run icons`     | Regenerate app icons from `assets/icons/logo.svg`                                                                                             |
 
 ### Project structure
 
@@ -152,7 +154,7 @@ src/
   renderer/          React UI (views and components)
   shared/            Pure logic shared by both processes (rules, diff/merge, risk, CSV, flow testing)
 forge.config.mts     Electron Forge build configuration (Vite, fuses, signing)
-electron-builder.yml Portable executable targets (Windows .exe, Linux AppImage, macOS zip)
+electron-builder.yml Release targets (Windows installer and portable .exe, Linux AppImage, macOS zip)
 vite.*.config.mts    Vite build configuration for main, preload, and renderer
 ```
 
@@ -160,7 +162,7 @@ vite.*.config.mts    Vite build configuration for main, preload, and renderer
 
 1. Add a `## [1.2.3] - YYYY-MM-DD` section to `CHANGELOG.md` and bump the version: `npm version <major|minor|patch> --no-git-tag-version`.
 2. Commit, then tag and push: `git tag v1.2.3 && git push origin main v1.2.3`.
-3. The [Release workflow](.github/workflows/release.yml) builds portable executables for Windows (x64 and Arm64), macOS (arm64 and x64) and Linux (x64) into a draft release. Once **every** build succeeds, it adds `SHA256SUMS.txt`, writes the release notes (a download table plus that version's CHANGELOG section, from [`.github/release-notes.md`](.github/release-notes.md)), and publishes the release as **Latest**.
+3. The [Release workflow](.github/workflows/release.yml) builds a Windows installer and portable executable (x64 and Arm64), plus macOS (arm64 and x64) and Linux (x64) builds, into a draft release. Once **every** build succeeds, it adds `SHA256SUMS.txt`, writes the release notes (a download table plus that version's CHANGELOG section, from [`.github/release-notes.md`](.github/release-notes.md)), and publishes the release as **Latest**.
 
 The tag must match the `version` in `package.json`. If a build fails, the release stays a draft. Fix the problem, then re-run the failed jobs (or run the workflow manually with the tag).
 
