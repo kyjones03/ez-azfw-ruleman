@@ -51,7 +51,7 @@
     "autoprefixer": "^10.6.2",
     "electron": "45.1.0",
     "electron-builder": "^26.18.0",
-    "oxfmt": "^0.74.0",
+    "oxfmt": "^0.75.0",
     "oxlint": "^1.90.0",
     "png2icons": "^2.0.1",
     "postcss": "^8.5.32",
