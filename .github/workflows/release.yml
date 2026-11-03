@@ -150,6 +150,8 @@ jobs:
           version="${RELEASE_TAG#v}"
           missing=0
           for file in \
+            "ez-azfw-ruleman-$version-win-x64-setup.exe" \
+            "ez-azfw-ruleman-$version-win-arm64-setup.exe" \
             "ez-azfw-ruleman-$version-win-x64.exe" \
             "ez-azfw-ruleman-$version-win-arm64.exe" \
             "ez-azfw-ruleman-$version-mac-arm64.zip" \

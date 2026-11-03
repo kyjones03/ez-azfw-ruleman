@@ -104,6 +104,9 @@ function createWindow(): void {
 }
 
 function onReady(): void {
+  // Must match the installer's appId so the taskbar groups and pins the app with its shortcuts.
+  if (process.platform === 'win32')
+    app.setAppUserModelId('com.samsmithmsft.ezazfwruleman');
   // In development macOS shows the Electron dock icon unless told otherwise.
   if (process.platform === 'darwin' && !app.isPackaged)
     app.dock?.setIcon(appIconPath());

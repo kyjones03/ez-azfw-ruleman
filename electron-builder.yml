@@ -11,10 +11,26 @@ directories:
 publish: null
 
 win:
-  target: portable
+  # An installer (Start menu and desktop shortcuts, uninstaller) plus the portable single file.
+  target:
+    - nsis
+    - portable
   icon: assets/icons/icon.ico
   # Keep the executable exactly as Forge produced it (fuses, metadata, optional signature).
   signAndEditExecutable: false
+
+nsis:
+  artifactName: ez-azfw-ruleman-${version}-win-${arch}-setup.${ext}
+  # Per-user install: no administrator prompt.
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: EZ AzFW Rule Manager
+  runAfterFinish: true
+  # Drafts, history and sign-in live in %APPDATA%\ez-azfw-ruleman; uninstalling keeps them.
+  deleteAppDataOnUninstall: false
 
 portable:
   # Unpack to a stable folder so later launches start faster.
