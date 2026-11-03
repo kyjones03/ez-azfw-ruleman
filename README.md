@@ -2,7 +2,7 @@
 
 A cross-platform desktop app for managing [Azure Firewall](https://learn.microsoft.com/azure/firewall/overview) policy rules with a safe **draft → review → commit** workflow.
 
-Instead of editing rules live in the Azure portal, you stage changes locally as a _candidate_, review the risk and the exact diff, and then commit them to Azure in one step — with a shared history of every commit.
+Instead of editing rules live in the Azure portal, you stage changes locally as a _candidate_, review the risk and the exact diff, and then commit them to Azure in one step, with a shared history of every commit.
 
 [![Latest release](https://img.shields.io/github/v/release/samsmith-MSFT/ez-azfw-ruleman?label=download&sort=semver)](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases/latest)
 [![CI](https://github.com/samsmith-MSFT/ez-azfw-ruleman/actions/workflows/ci.yml/badge.svg)](https://github.com/samsmith-MSFT/ez-azfw-ruleman/actions/workflows/ci.yml)
@@ -14,16 +14,16 @@ Instead of editing rules live in the Azure portal, you stage changes locally as 
 
 ## Features
 
-- **Sign in your way** — interactive browser sign-in (Microsoft Entra ID via MSAL) or reuse an existing Azure CLI session. Switch between directories (tenants) you have access to.
-- **Discovery** — finds Azure Firewalls and Firewall Policies across all your subscriptions using Azure Resource Graph.
-- **Rule editing** — create and edit rule collection groups, rule collections, and DNAT, network, and application rules, with lookups for IP Groups, service tags, FQDN tags, and web categories.
-- **Draft and commit** — changes are staged in a local candidate that survives restarts. Nothing is sent to Azure until you commit.
-- **Review** — see a per-group diff and a risk assessment (e.g. overly broad sources, destinations, or ports) before committing. Concurrent changes made in Azure are detected using ETags.
-- **Policy snapshots and rollback** — dated snapshots are captured automatically whenever a policy is loaded, updated, or committed, with collapsible Rule Collection Group → Rule Collection → Rules views and one-click rollback to any former state.
-- **Commit history** — every commit is saved to the same shared Azure Blob Storage account as the snapshots, so you and your teammates can see who made what change and its outcome. Commits that couldn't be saved there still show on the device that made them.
-- **Flow tester** — check which rule would match a given source, destination, protocol, and port. Optionally pick the destination's web category (from the portal's Web Category Check) so web category rules can be decided.
-- **CSV import and export** — bulk-edit rules in a spreadsheet and bring them back in.
-- **Deploy new firewalls** — a guided wizard deploys a new Azure Firewall and Firewall Policy into a new or existing virtual network, or a Virtual WAN hub, using an ARM deployment.
+- **Sign in your way**: interactive browser sign-in (Microsoft Entra ID via MSAL) or reuse an existing Azure CLI session. Switch between directories (tenants) you have access to.
+- **Discovery**: finds Azure Firewalls and Firewall Policies across all your subscriptions using Azure Resource Graph.
+- **Rule editing**: create and edit rule collection groups, rule collections, and DNAT, network, and application rules, with lookups for IP Groups, service tags, FQDN tags, and web categories.
+- **Draft and commit**: changes are staged in a local candidate that survives restarts. Nothing is sent to Azure until you commit.
+- **Review**: see a per-group diff and a risk assessment (e.g. overly broad sources, destinations, or ports) before committing. Concurrent changes made in Azure are detected using ETags.
+- **Policy snapshots and rollback**: dated snapshots are captured automatically whenever a policy is loaded, updated, or committed, with collapsible Rule Collection Group → Rule Collection → Rules views and one-click rollback to any former state.
+- **Commit history**: every commit is saved to the same shared Azure Blob Storage account as the snapshots, so you and your teammates can see who made what change and its outcome. Commits that couldn't be saved there still show on the device that made them.
+- **Flow tester**: check which rule would match a given source, destination, protocol, and port. Optionally pick the destination's web category (from the portal's Web Category Check) so web category rules can be decided.
+- **CSV import and export**: bulk-edit rules in a spreadsheet and bring them back in.
+- **Deploy new firewalls**: a guided wizard deploys a new Azure Firewall and Firewall Policy into a new or existing virtual network, or a Virtual WAN hub, using an ARM deployment.
 
 ## Download and run
 
@@ -43,14 +43,14 @@ The Windows executable unpacks itself to a temporary folder each time it starts,
 
 Release builds are not code-signed unless the maintainer has configured signing certificates (see the [code signing policy](#code-signing-policy)), so your OS may warn you the first time you run the app.
 
-- **Windows SmartScreen** — if you see "Windows protected your PC", select **More info** → **Run anyway**.
-- **macOS Gatekeeper** — if macOS says the app "cannot be opened" or "is damaged", right-click it and choose **Open**, or go to **System Settings** → **Privacy & Security** and select **Open Anyway**. Alternatively, remove the quarantine flag:
+- **Windows SmartScreen**: if you see "Windows protected your PC", select **More info** → **Run anyway**.
+- **macOS Gatekeeper**: if macOS says the app "cannot be opened" or "is damaged", right-click it and choose **Open**, or go to **System Settings** → **Privacy & Security** and select **Open Anyway**. Alternatively, remove the quarantine flag:
 
   ```sh
   xattr -dr com.apple.quarantine "EZ AzFW Rule Manager.app"
   ```
 
-- **Linux** — AppImages need FUSE 2 (`sudo apt install libfuse2` on Ubuntu 22.04+). On Ubuntu 23.10 and later, AppArmor blocks the Chromium sandbox for apps outside system paths; if the app exits immediately, allow it with an AppArmor profile (`/etc/apparmor.d/ez-azfw-ruleman`):
+- **Linux**: AppImages need FUSE 2 (`sudo apt install libfuse2` on Ubuntu 22.04+). On Ubuntu 23.10 and later, AppArmor blocks the Chromium sandbox for apps outside system paths; if the app exits immediately, allow it with an AppArmor profile (`/etc/apparmor.d/ez-azfw-ruleman`):
 
   ```text
   abi <abi/4.0>,
@@ -97,8 +97,8 @@ Everything the app keeps is stored locally in your user profile, in an `ez-azfw-
 | macOS   | `~/Library/Application Support/ez-azfw-ruleman` |
 | Linux   | `~/.config/ez-azfw-ruleman`                     |
 
-- `ez-azfw-ruleman-state.json` — draft (candidate) changes, your recent commits, and storage settings. Policy snapshots and the shared commit history live in Azure Blob Storage, not on disk.
-- `msal-cache.bin` — the sign-in token cache, **encrypted** with the OS key store (DPAPI on Windows, Keychain on macOS, libsecret on Linux). If no secure key store is available (e.g. Linux without a keyring), tokens are never written to disk and you sign in again each session.
+- `ez-azfw-ruleman-state.json`: draft (candidate) changes, your recent commits, and storage settings. Policy snapshots and the shared commit history live in Azure Blob Storage, not on disk.
+- `msal-cache.bin`: the sign-in token cache, **encrypted** with the OS key store (DPAPI on Windows, Keychain on macOS, libsecret on Linux). If no secure key store is available (e.g. Linux without a keyring), tokens are never written to disk and you sign in again each session.
 
 Delete the folder to reset the app. No telemetry is collected; the app talks only to Microsoft Entra ID, Azure Resource Manager and the Azure Blob Storage account you choose for snapshots and commit history.
 
@@ -179,7 +179,7 @@ Locally, the same settings are read from environment variables (`APPLE_SIGNING_I
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). To report a security issue, see [SECURITY.md](SECURITY.md).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security issue, see [SECURITY.md](SECURITY.md).
 
 ## Disclaimer
 
