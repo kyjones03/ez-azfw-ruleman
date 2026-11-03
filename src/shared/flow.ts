@@ -142,8 +142,8 @@ function matchSource(
   groups?: IpGroupMembers,
 ): Tri {
   return anyOf([
-    ...(r.sourceAddresses ?? []).map(
-      (a): Tri => (addressContains(a, ip) ? 'match' : 'no'),
+    ...(r.sourceAddresses ?? []).map((a): Tri =>
+      addressContains(a, ip) ? 'match' : 'no',
     ),
     ...matchIpGroups(r.sourceIpGroups, ip, groups, 'source', u),
   ]);
@@ -190,15 +190,14 @@ function matchNetwork(
           : 'no'
         : 'no';
     }),
-    ...(r.destinationFqdns ?? []).map(
-      (f): Tri =>
-        destIsIp
-          ? u.add(
-              `it depends on what ${f} resolves to, which only the firewall’s DNS knows`,
-            )
-          : fqdnMatches(f, flow.destination)
-            ? 'match'
-            : 'no',
+    ...(r.destinationFqdns ?? []).map((f): Tri =>
+      destIsIp
+        ? u.add(
+            `it depends on what ${f} resolves to, which only the firewall’s DNS knows`,
+          )
+        : fqdnMatches(f, flow.destination)
+          ? 'match'
+          : 'no',
     ),
     ...matchIpGroups(
       r.destinationIpGroups,
@@ -227,30 +226,27 @@ function matchApplication(
   if (!portOk) return 'no';
   const destIsIp = isIpv4(flow.destination);
   const dest = anyOf([
-    ...(r.targetFqdns ?? []).map(
-      (f): Tri =>
-        f.trim() === '*'
-          ? 'match'
-          : destIsIp
-            ? 'no'
-            : fqdnMatches(f, flow.destination)
-              ? 'match'
-              : 'no',
+    ...(r.targetFqdns ?? []).map((f): Tri =>
+      f.trim() === '*'
+        ? 'match'
+        : destIsIp
+          ? 'no'
+          : fqdnMatches(f, flow.destination)
+            ? 'match'
+            : 'no',
     ),
-    ...(r.targetUrls ?? []).map(
-      (url): Tri =>
-        !destIsIp && fqdnMatches(url.split('/')[0], flow.destination)
-          ? u.add('it depends on the URL path, which this test doesn’t include')
-          : 'no',
+    ...(r.targetUrls ?? []).map((url): Tri =>
+      !destIsIp && fqdnMatches(url.split('/')[0], flow.destination)
+        ? u.add('it depends on the URL path, which this test doesn’t include')
+        : 'no',
     ),
     // Tags and categories describe internet services and sites, never private addresses.
-    ...(r.fqdnTags ?? []).map(
-      (t): Tri =>
-        destIsIp && isPrivateIp(flow.destination)
-          ? 'no'
-          : u.add(
-              `it depends on whether the destination is part of the ${t} FQDN tag, which only Azure knows`,
-            ),
+    ...(r.fqdnTags ?? []).map((t): Tri =>
+      destIsIp && isPrivateIp(flow.destination)
+        ? 'no'
+        : u.add(
+            `it depends on whether the destination is part of the ${t} FQDN tag, which only Azure knows`,
+          ),
     ),
     ...(r.webCategories ?? []).map((c): Tri => {
       if (destIsIp && isPrivateIp(flow.destination)) return 'no';
@@ -265,9 +261,8 @@ function matchApplication(
         `it depends on whether the site is in the ${c} web category, which only Azure can look up`,
       );
     }),
-    ...(r.destinationAddresses ?? []).map(
-      (a): Tri =>
-        destIsIp && addressContains(a, flow.destination) ? 'match' : 'no',
+    ...(r.destinationAddresses ?? []).map((a): Tri =>
+      destIsIp && addressContains(a, flow.destination) ? 'match' : 'no',
     ),
   ]);
   return combine(matchSource(r, flow.source, u, groups), dest);

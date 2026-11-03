@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Updated React to 19, TypeScript to 7 and the formatter (oxfmt), and the GitHub Actions used by CI and releases to v7.
+
 ## [1.3.0] - 2026-11-03
 
 ### Added
