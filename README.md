@@ -8,9 +8,13 @@ Instead of editing rules live in the Azure portal, you stage changes locally as 
 [![CI](https://github.com/samsmith-MSFT/ez-azfw-ruleman/actions/workflows/ci.yml/badge.svg)](https://github.com/samsmith-MSFT/ez-azfw-ruleman/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**[⬇ Download the latest version](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases/latest)** for Windows, macOS or Linux. Nothing to install: download it and run it.
+**[⬇ Download the latest version](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases/latest)** for Windows, macOS or Linux. On Windows, use the installer or the portable file; on macOS and Linux, download it and run it.
 
-**Jump to:** [Features](#features) · [Download](#download-and-run) · [Signing in](#signing-in) · [Permissions](#required-azure-permissions) · [Data storage](#where-your-data-is-stored) · [Code signing policy](#code-signing-policy) · [Development](#development) · [Releasing](#releasing) · [Contributing](#contributing) · [Disclaimer](#disclaimer) · [License](#license)
+**Jump to:** [Features](#features) · [Screenshots](#screenshots) · [Download](#download-and-run) · [Signing in](#signing-in) · [Permissions](#required-azure-permissions) · [Data storage](#where-your-data-is-stored) · [Code signing policy](#code-signing-policy) · [Development](#development) · [Releasing](#releasing) · [Contributing](#contributing) · [Disclaimer](#disclaimer) · [License](#license)
+
+![Rule collection groups in a firewall policy, with a draft that adds, changes and removes rules](docs/images/rules.png)
+
+_Editing a policy: draft changes are marked as added (+), changed (~) or removed (-), and nothing reaches Azure until you commit._
 
 ## Features
 
@@ -24,6 +28,54 @@ Instead of editing rules live in the Azure portal, you stage changes locally as 
 - **Flow tester**: check which rule would match a given source, destination, protocol, and port. Optionally pick the destination's web category (from the portal's Web Category Check) so web category rules can be decided.
 - **CSV import and export**: bulk-edit rules in a spreadsheet and bring them back in.
 - **Deploy new firewalls**: a guided wizard deploys a new Azure Firewall and Firewall Policy into a new or existing virtual network, or a Virtual WAN hub, using an ARM deployment.
+
+## Screenshots
+
+All screenshots use made-up demo data (a fictional company called Contoso); none of it comes from a real environment.
+
+### See all your firewalls in one place
+
+Firewalls from every subscription you can access, grouped by subscription, with filters for name, resource group, location and tag. Choose which ones the app shows; hiding a firewall changes nothing in Azure.
+
+![The Firewalls page, listing firewalls grouped by subscription](docs/images/firewalls.png)
+
+![Choosing which firewalls to show, with classic-rule firewalls marked read-only](docs/images/choose-firewalls.png)
+
+### Understand how policies fit together
+
+Policies are shown with their parents and children, so you can see which rules a firewall inherits and which have uncommitted changes.
+
+![The Policies page, showing a parent policy with two child policies and an uncommitted change](docs/images/policies.png)
+
+### Edit rules in a local draft
+
+Edit rule collections and rules with pickers for IP Groups, service tags, FQDN tags and web categories. Inherited rules from a parent policy are shown read-only.
+
+![The rule collection editor, with a rule being edited](docs/images/rule-editor.png)
+
+### Review the diff and the risk before you commit
+
+Every change is listed, risky ones (such as a rule that allows any source to any destination on any port) are flagged, and you must acknowledge them before the commit goes ahead.
+
+![The commit dialog, listing the changes and a risk warning that must be acknowledged](docs/images/commit-review.png)
+
+### Test traffic against your rules
+
+The flow tester shows which rule would handle a given flow, in Azure's processing order and including inherited rules and your draft.
+
+![The flow tester showing a flow denied by an inherited web category rule](docs/images/flow-tester.png)
+
+### Roll back to any earlier state
+
+Each commit saves a snapshot of the whole policy to your Azure storage account. Browse a snapshot's groups, collections and rules, or roll back to it with one click.
+
+![The Snapshots page, with one snapshot expanded to show its rule collection groups](docs/images/snapshots.png)
+
+### See who changed what
+
+The commit history is shared with your team and records each commit's author, description, changes and result.
+
+![The Commit history page, with one commit expanded to show what changed](docs/images/commit-history.png)
 
 ## Download and run
 
@@ -166,6 +218,7 @@ Set `EZAZFW_DEVTOOLS=1` to open the developer tools on start in development.
 
 ```text
 assets/icons/        App icon sources and generated .ico/.icns/.png
+docs/images/         Screenshots used in this README (demo data only)
 scripts/             Build helper scripts (portable release build, icon generation)
 src/
   main.ts            Electron main process entry point
