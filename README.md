@@ -39,7 +39,7 @@ The Windows executable unpacks itself to a temporary folder each time it starts,
 
 ### First launch on each OS
 
-Release builds are not code-signed unless the maintainer has configured signing certificates, so your OS may warn you the first time you run the app.
+Release builds are not code-signed unless the maintainer has configured signing certificates (see the [code signing policy](#code-signing-policy)), so your OS may warn you the first time you run the app.
 
 - **Windows SmartScreen** — if you see "Windows protected your PC", select **More info** → **Run anyway**.
 - **macOS Gatekeeper** — if macOS says the app "cannot be opened" or "is damaged", right-click it and choose **Open**, or go to **System Settings** → **Privacy & Security** and select **Open Anyway**. Alternatively, remove the quarantine flag:
@@ -98,7 +98,18 @@ Everything the app keeps is stored locally in your user profile, in an `ez-azfw-
 - `ez-azfw-ruleman-state.json` — draft (candidate) changes, your recent commits, and storage settings. Policy snapshots and the shared commit history live in Azure Blob Storage, not on disk.
 - `msal-cache.bin` — the sign-in token cache, **encrypted** with the OS key store (DPAPI on Windows, Keychain on macOS, libsecret on Linux). If no secure key store is available (e.g. Linux without a keyring), tokens are never written to disk and you sign in again each session.
 
-Delete the folder to reset the app. No telemetry is collected; the app talks only to Microsoft Entra ID and Azure Resource Manager.
+Delete the folder to reset the app. No telemetry is collected; the app talks only to Microsoft Entra ID, Azure Resource Manager and the Azure Blob Storage account you choose for snapshots and commit history.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+> **Status:** Windows signing is applied for but not yet active, so Windows builds are currently unsigned. This note will be removed once signing is live.
+
+- **Scope:** only the Windows executables (`.exe`) in [GitHub releases](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases), built from this repository by the [Release workflow](.github/workflows/release.yml). Nothing built elsewhere is signed.
+- **Authors, reviewers and approvers:** [samsmith-MSFT](https://github.com/samsmith-MSFT). Every release needs manual approval before it is signed.
+- **Privacy policy:** this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. It sends nothing to the maintainers. Its only network connections are to Microsoft Entra ID, Azure Resource Manager and the Azure Blob Storage account you configure, using your own sign-in (see [Where your data is stored](#where-your-data-is-stored)).
+- **No system changes:** the app is portable. It doesn't install anything or change system settings, and you uninstall it by deleting the file and the data folder above.
 
 ## Development
 
