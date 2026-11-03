@@ -123,6 +123,7 @@ Policy snapshots and the shared commit history are stored in an Azure Blob Stora
 CSV exports go where you choose in the save dialog (the Documents folder by default). The Windows executable also unpacks itself to an `ez-azfw-ruleman` folder in your temporary files.
 
 To reset the app, sign out and delete the `ez-azfw-ruleman` folder in the table above. No telemetry is collected; the app talks only to Microsoft Entra ID, Azure Resource Manager and the Azure Blob Storage account you choose for snapshots and commit history.
+
 ## Code signing policy
 
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
