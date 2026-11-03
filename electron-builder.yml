@@ -34,6 +34,7 @@ nsis:
   deleteAppDataOnUninstall: false
 
 portable:
+  artifactName: ez-azfw-ruleman-${version}-win-${arch}-portable.${ext}
   # Unpack to a stable folder so later launches start faster.
   unpackDirName: ez-azfw-ruleman
 

@@ -29,15 +29,15 @@ Instead of editing rules live in the Azure portal, you stage changes locally as 
 
 Download the file for your platform from the [latest release](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases/latest). On Windows, the **installer** adds Start menu and desktop shortcuts and an uninstaller. The Windows portable file and the macOS and Linux builds need no installation: download and run them.
 
-| Platform                   | File                                              | How to run                                    |
-| -------------------------- | ------------------------------------------------- | --------------------------------------------- |
-| Windows (x64), installer   | `ez-azfw-ruleman-<version>-win-x64-setup.exe`     | Run it and follow the prompts                 |
-| Windows (Arm64), installer | `ez-azfw-ruleman-<version>-win-arm64-setup.exe`   | Run it and follow the prompts                 |
-| Windows (x64), portable    | `ez-azfw-ruleman-<version>-win-x64.exe`           | Double-click it                               |
-| Windows (Arm64), portable  | `ez-azfw-ruleman-<version>-win-arm64.exe`         | Double-click it                               |
-| macOS (Apple silicon)      | `ez-azfw-ruleman-<version>-mac-arm64.zip`         | Unzip, then open **EZ AzFW Rule Manager.app** |
-| macOS (Intel)              | `ez-azfw-ruleman-<version>-mac-x64.zip`           | Unzip, then open **EZ AzFW Rule Manager.app** |
-| Linux (x64)                | `ez-azfw-ruleman-<version>-linux-x86_64.AppImage` | `chmod +x` it, then run it                    |
+| Platform                   | File                                               | How to run                                    |
+| -------------------------- | -------------------------------------------------- | --------------------------------------------- |
+| Windows (x64), installer   | `ez-azfw-ruleman-<version>-win-x64-setup.exe`      | Run it and follow the prompts                 |
+| Windows (Arm64), installer | `ez-azfw-ruleman-<version>-win-arm64-setup.exe`    | Run it and follow the prompts                 |
+| Windows (x64), portable    | `ez-azfw-ruleman-<version>-win-x64-portable.exe`   | Double-click it                               |
+| Windows (Arm64), portable  | `ez-azfw-ruleman-<version>-win-arm64-portable.exe` | Double-click it                               |
+| macOS (Apple silicon)      | `ez-azfw-ruleman-<version>-mac-arm64.zip`          | Unzip, then open **EZ AzFW Rule Manager.app** |
+| macOS (Intel)              | `ez-azfw-ruleman-<version>-mac-x64.zip`            | Unzip, then open **EZ AzFW Rule Manager.app** |
+| Linux (x64)                | `ez-azfw-ruleman-<version>-linux-x86_64.AppImage`  | `chmod +x` it, then run it                    |
 
 The installer asks for administrator rights, installs for all users in `C:\Program Files\EZ AzFW Rule Manager` by default (you can pick another folder or drive), and you can remove it from **Settings** → **Apps** like any other app. Uninstalling keeps your data. The portable Windows executable unpacks itself to a temporary folder when it starts, so it takes a few seconds longer to open. Your drafts, history and sign-in are kept in your user profile (see [Where your data is stored](#where-your-data-is-stored)), not next to the executable, so you can switch between the installer and portable builds, or replace either with a newer version, freely.
 

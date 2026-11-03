@@ -6,12 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-03
+
 ### Added
 
 - **Windows installer.** Each release now includes an installer (`-setup.exe`) that lets you choose the install folder (`C:\Program Files` by default), with Start menu and desktop shortcuts and an uninstaller, alongside the portable `.exe`. Your data is shared between the two and is kept when you uninstall.
 
 ### Changed
 
+- The portable Windows file is now named `ez-azfw-ruleman-<version>-win-<arch>-portable.exe`, to tell it apart from the installer.
 - Updated React to 19, TypeScript to 7 and the formatter (oxfmt), and the GitHub Actions used by CI and releases to v7.
 
 ## [1.3.0] - 2026-11-03
@@ -75,7 +78,8 @@ Initial public release.
 - Encrypted, OS key store–backed token cache.
 - Portable, no-install executables for Windows (x64 and Arm64 `.exe`), macOS (zipped `.app`, arm64 and x64), and Linux (x64 AppImage).
 
-[Unreleased]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.1.0...v1.1.1
