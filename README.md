@@ -19,7 +19,7 @@ Instead of editing rules live in the Azure portal, you stage changes locally as 
 - **Rule editing**: create and edit rule collection groups, rule collections, and DNAT, network, and application rules, with lookups for IP Groups, service tags, FQDN tags, and web categories.
 - **Draft and commit**: changes are staged in a local candidate that survives restarts. Nothing is sent to Azure until you commit.
 - **Review**: see a per-group diff and a risk assessment (e.g. overly broad sources, destinations, or ports) before committing. Concurrent changes made in Azure are detected using ETags.
-- **Policy snapshots and rollback**: dated snapshots are captured automatically whenever a policy is loaded, updated, or committed, with collapsible Rule Collection Group → Rule Collection → Rules views and one-click rollback to any former state.
+- **Policy snapshots and rollback**: a full snapshot of the policy is saved to shared Azure Blob Storage each time you commit, with collapsible Rule Collection Group → Rule Collection → Rules views and one-click rollback to any former state.
 - **Commit history**: every commit is saved to the same shared Azure Blob Storage account as the snapshots, so you and your teammates can see who made what change and its outcome. Commits that couldn't be saved there still show on the device that made them.
 - **Flow tester**: check which rule would match a given source, destination, protocol, and port. Optionally pick the destination's web category (from the portal's Web Category Check) so web category rules can be decided.
 - **CSV import and export**: bulk-edit rules in a spreadsheet and bring them back in.
@@ -91,7 +91,11 @@ Access is governed by Azure RBAC on your own account:
 
 ## Where your data is stored
 
-Everything the app keeps is stored locally in your user profile, in an `ez-azfw-ruleman` folder:
+The app keeps data in three places: on your device, in your own Azure storage account, and in files you choose to save.
+
+### On your device
+
+Everything the app saves locally goes in your user profile, in an `ez-azfw-ruleman` folder. It is not next to the executable, so you can move or replace the app freely.
 
 | OS      | Location                                        |
 | ------- | ----------------------------------------------- |
@@ -99,11 +103,26 @@ Everything the app keeps is stored locally in your user profile, in an `ez-azfw-
 | macOS   | `~/Library/Application Support/ez-azfw-ruleman` |
 | Linux   | `~/.config/ez-azfw-ruleman`                     |
 
-- `ez-azfw-ruleman-state.json`: draft (candidate) changes, your recent commits, and storage settings. Policy snapshots and the shared commit history live in Azure Blob Storage, not on disk.
-- `msal-cache.bin`: the sign-in token cache, **encrypted** with the OS key store (DPAPI on Windows, Keychain on macOS, libsecret on Linux). If no secure key store is available (e.g. Linux without a keyring), tokens are never written to disk and you sign in again each session.
+- `ez-azfw-ruleman-state.json`: your draft (candidate) changes, including a copy of each group as it was when you started editing; your 200 most recent commits; commits still running; the list of firewalls you manage; which storage account and containers hold your snapshots; your last sign-in (user name and directory); and which sign-in to restore at startup (the method and account ID, never a password or token).
+- `msal-cache.bin`: the sign-in token cache, **encrypted** with the OS key store (DPAPI on Windows, Keychain on macOS, libsecret on Linux). If no secure key store is available (e.g. Linux without a keyring), tokens are never written to disk and you sign in again each session. Signing out deletes it.
+- Browser-engine data that the app's window creates automatically: your interface preferences and recent activity list (panel layout, filters, auto-refresh interval, recent commits and deployments) in local storage, the sign-in window's cookies and remembered accounts in a `Partitions` folder (cleared when you sign out), and ordinary cache files.
 
-Delete the folder to reset the app. No telemetry is collected; the app talks only to Microsoft Entra ID, Azure Resource Manager and the Azure Blob Storage account you choose for snapshots and commit history.
+With Azure CLI sign-in the app saves no token of its own: it asks the CLI for one when needed.
 
+### In your Azure storage account
+
+Policy snapshots and the shared commit history are stored in an Azure Blob Storage account you choose or create in the app, not on your device.
+
+- A full snapshot of the policy's rules is uploaded each time a commit finishes, to the `ez-azfw-snapshots` container by default. Commit history goes to a separate container, `ez-azfw-history` by default.
+- You must configure this storage before you can commit, because every commit saves a snapshot.
+- The account is tagged `ez-azfw-ruleman-snapshots = true`, so your teammates' installations find it automatically.
+- The app reads and writes the blobs with your own Microsoft Entra sign-in, not storage account keys (see [Required Azure permissions](#required-azure-permissions)).
+
+### Files you save
+
+CSV exports go where you choose in the save dialog (the Documents folder by default). The Windows executable also unpacks itself to an `ez-azfw-ruleman` folder in your temporary files.
+
+To reset the app, sign out and delete the `ez-azfw-ruleman` folder in the table above. No telemetry is collected; the app talks only to Microsoft Entra ID, Azure Resource Manager and the Azure Blob Storage account you choose for snapshots and commit history.
 ## Code signing policy
 
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
