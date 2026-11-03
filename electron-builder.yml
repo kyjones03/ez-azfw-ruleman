@@ -21,9 +21,10 @@ win:
 
 nsis:
   artifactName: ez-azfw-ruleman-${version}-win-${arch}-setup.${ext}
-  # Per-user install: no administrator prompt.
+  # Standard install: asks for administrator rights, then installs for all users under
+  # C:\Program Files by default (the wizard lets people pick another folder or drive).
   oneClick: false
-  perMachine: false
+  perMachine: true
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true

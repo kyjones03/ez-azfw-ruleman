@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **Windows installer.** Each release now includes a per-user installer (`-setup.exe`) with Start menu and desktop shortcuts and an uninstaller, alongside the portable `.exe`. Your data is shared between the two and is kept when you uninstall.
+- **Windows installer.** Each release now includes an installer (`-setup.exe`) that lets you choose the install folder (`C:\Program Files` by default), with Start menu and desktop shortcuts and an uninstaller, alongside the portable `.exe`. Your data is shared between the two and is kept when you uninstall.
 
 ### Changed
 

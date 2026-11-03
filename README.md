@@ -39,7 +39,7 @@ Download the file for your platform from the [latest release](https://github.com
 | macOS (Intel)              | `ez-azfw-ruleman-<version>-mac-x64.zip`           | Unzip, then open **EZ AzFW Rule Manager.app** |
 | Linux (x64)                | `ez-azfw-ruleman-<version>-linux-x86_64.AppImage` | `chmod +x` it, then run it                    |
 
-The installer is per-user, so it doesn't need administrator rights, and you can remove it from **Settings** → **Apps** like any other app. Uninstalling keeps your data. The portable Windows executable unpacks itself to a temporary folder when it starts, so it takes a few seconds longer to open. Your drafts, history and sign-in are kept in your user profile (see [Where your data is stored](#where-your-data-is-stored)), not next to the executable, so you can switch between the installer and portable builds, or replace either with a newer version, freely.
+The installer asks for administrator rights, installs for all users in `C:\Program Files\EZ AzFW Rule Manager` by default (you can pick another folder or drive), and you can remove it from **Settings** → **Apps** like any other app. Uninstalling keeps your data. The portable Windows executable unpacks itself to a temporary folder when it starts, so it takes a few seconds longer to open. Your drafts, history and sign-in are kept in your user profile (see [Where your data is stored](#where-your-data-is-stored)), not next to the executable, so you can switch between the installer and portable builds, or replace either with a newer version, freely.
 
 ### First launch on each OS
 
@@ -120,7 +120,7 @@ Policy snapshots and the shared commit history are stored in an Azure Blob Stora
 
 ### Files you save
 
-CSV exports go where you choose in the save dialog (the Documents folder by default). The portable Windows build also unpacks itself to an `ez-azfw-ruleman` folder in your temporary files, and the Windows installer puts the app under `%LOCALAPPDATA%\Programs` by default.
+CSV exports go where you choose in the save dialog (the Documents folder by default). The portable Windows build also unpacks itself to an `ez-azfw-ruleman` folder in your temporary files, and the Windows installer puts the app under `C:\Program Files\EZ AzFW Rule Manager` by default.
 
 To reset the app, sign out and delete the `ez-azfw-ruleman` folder in the table above. No telemetry is collected; the app talks only to Microsoft Entra ID, Azure Resource Manager and the Azure Blob Storage account you choose for snapshots and commit history.
 
@@ -133,7 +133,7 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 - **Scope:** only the Windows executables (`.exe`) in [GitHub releases](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases), built from this repository by the [Release workflow](.github/workflows/release.yml). Nothing built elsewhere is signed.
 - **Authors, reviewers and approvers:** [samsmith-MSFT](https://github.com/samsmith-MSFT). Every release needs manual approval before it is signed.
 - **Privacy policy:** this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. It sends nothing to the maintainers. Its only network connections are to Microsoft Entra ID, Azure Resource Manager and the Azure Blob Storage account you configure, using your own sign-in (see [Where your data is stored](#where-your-data-is-stored)).
-- **System changes:** the portable build installs nothing and changes no system settings; delete the file and the data folder above to remove it. The Windows installer adds only a per-user Start menu entry, a desktop shortcut and an uninstall entry, and its uninstaller removes them.
+- **System changes:** the portable build installs nothing and changes no system settings; delete the file and the data folder above to remove it. The Windows installer needs administrator rights and adds only a Start menu entry, a desktop shortcut and an uninstall entry, and its uninstaller removes them.
 
 ## Development
 
