@@ -10,6 +10,8 @@ Instead of editing rules live in the Azure portal, you stage changes locally as 
 
 **[⬇ Download the latest version](https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases/latest)** for Windows, macOS or Linux. Nothing to install: download it and run it.
 
+**Jump to:** [Features](#features) · [Download](#download-and-run) · [Signing in](#signing-in) · [Permissions](#required-azure-permissions) · [Data storage](#where-your-data-is-stored) · [Code signing policy](#code-signing-policy) · [Development](#development) · [Releasing](#releasing) · [Contributing](#contributing) · [Disclaimer](#disclaimer) · [License](#license)
+
 ## Features
 
 - **Sign in your way** — interactive browser sign-in (Microsoft Entra ID via MSAL) or reuse an existing Azure CLI session. Switch between directories (tenants) you have access to.
@@ -178,6 +180,10 @@ Locally, the same settings are read from environment variables (`APPLE_SIGNING_I
 ## Contributing
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). To report a security issue, see [SECURITY.md](SECURITY.md).
+
+## Disclaimer
+
+This software is provided "as is", without warranty of any kind, and you use it at your own risk. It changes Azure Firewall policies, which can affect network traffic and security. Review every change before you commit it, test in a non-production environment first, and keep your own backups or snapshots. The authors aren't liable for any outage, data loss, security exposure or other damage that results from using it. See the [LICENSE](LICENSE) for the full terms.
 
 ## License
 
