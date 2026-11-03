@@ -26,7 +26,7 @@ _Editing a policy: draft changes are marked as added (+), changed (~) or removed
 - **Policy snapshots and rollback**: a full snapshot of the policy is saved to shared Azure Blob Storage each time you commit, with collapsible Rule Collection Group → Rule Collection → Rules views and one-click rollback to any former state.
 - **Commit history**: every commit is saved to the same shared Azure Blob Storage account as the snapshots, so you and your teammates can see who made what change and its outcome. Commits that couldn't be saved there still show on the device that made them.
 - **Flow tester**: check which rule would match a given source, destination, protocol, and port. Optionally pick the destination's web category (from the portal's Web Category Check) so web category rules can be decided.
-- **CSV import and export**: bulk-edit rules in a spreadsheet and bring them back in.
+- **CSV export**: export the rules of one rule collection group, or of every group in a policy, to a CSV file for review in a spreadsheet.
 - **Deploy new firewalls**: a guided wizard deploys a new Azure Firewall and Firewall Policy into a new or existing virtual network, or a Virtual WAN hub, using an ARM deployment.
 
 ## Screenshots

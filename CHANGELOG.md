@@ -73,7 +73,7 @@ Initial public release.
 - Risk review and per-group diffs before committing, with detection of concurrent changes made in Azure.
 - Local commit history.
 - Flow tester to find which rule matches a given flow.
-- CSV import and export of rules.
+- CSV export of rules.
 - Wizard to deploy a new Azure Firewall and Firewall Policy.
 - Encrypted, OS key store–backed token cache.
 - Portable, no-install executables for Windows (x64 and Arm64 `.exe`), macOS (zipped `.app`, arm64 and x64), and Linux (x64 AppImage).
