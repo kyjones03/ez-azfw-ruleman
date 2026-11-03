@@ -95,7 +95,7 @@ The app keeps data in three places: on your device, in your own Azure storage ac
 
 ### On your device
 
-Everything the app saves locally goes in your user profile, in an `ez-azfw-ruleman` folder. It is not next to the executable, so you can move or replace the app freely.
+Everything the app saves locally goes in your user profile, in an `ez-azfw-ruleman` folder. It is the same whether you use the installer or the portable build, and it is not next to the executable, so you can move or replace the app freely.
 
 | OS      | Location                                        |
 | ------- | ----------------------------------------------- |
@@ -120,7 +120,7 @@ Policy snapshots and the shared commit history are stored in an Azure Blob Stora
 
 ### Files you save
 
-CSV exports go where you choose in the save dialog (the Documents folder by default). The Windows executable also unpacks itself to an `ez-azfw-ruleman` folder in your temporary files.
+CSV exports go where you choose in the save dialog (the Documents folder by default). The portable Windows build also unpacks itself to an `ez-azfw-ruleman` folder in your temporary files, and the Windows installer puts the app under `%LOCALAPPDATA%\Programs` by default.
 
 To reset the app, sign out and delete the `ez-azfw-ruleman` folder in the table above. No telemetry is collected; the app talks only to Microsoft Entra ID, Azure Resource Manager and the Azure Blob Storage account you choose for snapshots and commit history.
 
