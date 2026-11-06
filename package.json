@@ -65,7 +65,7 @@
     "@azure/arm-resourcegraph": "^5.0.0",
     "@azure/arm-resources": "^8.0.0",
     "@azure/arm-resourcesdeployments": "^2.0.0",
-    "@azure/identity": "^4.14.0",
+    "@azure/identity": "^4.14.1",
     "@azure/msal-node": "^7.1.2",
     "@fontsource-variable/atkinson-hyperlegible-mono": "^5.3.0",
     "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
