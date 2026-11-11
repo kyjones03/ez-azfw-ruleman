@@ -2,7 +2,9 @@
 
 A cross-platform desktop app for managing [Azure Firewalls](https://learn.microsoft.com/azure/firewall/overview), policies, rules and IP groups, with a safe **draft → review → commit** workflow for rule and configuration changes.
 
-Instead of editing rules live in the Azure portal, you stage changes locally as a _candidate_, review the risk and the exact diff, and then commit them to Azure in one step, with a shared history of every commit.
+Previously named **EZ AzFW Rule Manager**, the app is now **EZ AzFW Manager**. Existing saved data and settings are retained when upgrading.
+
+Instead of editing rules and configuration live in the Azure portal, you stage changes locally as a _candidate_, review the risk and the exact diff, and then commit them to Azure, with a shared history of every commit. IP group creation is a separate, clearly marked operation that writes directly to Azure.
 
 [![Latest release](https://img.shields.io/github/v/release/samsmith-MSFT/ez-azfw-manager?label=download&sort=semver)](https://github.com/samsmith-MSFT/ez-azfw-manager/releases/latest)
 [![CI](https://github.com/samsmith-MSFT/ez-azfw-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/samsmith-MSFT/ez-azfw-manager/actions/workflows/ci.yml)
@@ -12,7 +14,7 @@ Instead of editing rules live in the Azure portal, you stage changes locally as 
 
 **Jump to:** [Features](#features) · [Screenshots](#screenshots) · [Download](#download-and-run) · [Signing in](#signing-in) · [Permissions](#required-azure-permissions) · [Data storage](#where-your-data-is-stored) · [Code signing policy](#code-signing-policy) · [Development](#development) · [Releasing](#releasing) · [Contributing](#contributing) · [Disclaimer](#disclaimer) · [License](#license)
 
-![Rule collection groups in a firewall policy, with a draft that adds, changes and removes rules](docs/images/rules.png)
+![EZ AzFW Manager rule editor with IP group names, CSV import, and added, changed and removed draft rules](docs/images/rules.png)
 
 _Editing a policy: draft changes are marked as added (+), changed (~) or removed (-), and nothing reaches Azure until you commit._
 
@@ -25,9 +27,9 @@ _Editing a policy: draft changes are marked as added (+), changed (~) or removed
 - **Firewall settings and power**: open a firewall's name or **Edit firewall settings** to view learned SNAT prefixes, associate an existing Route Server, configure prescaling, or assign/remove existing maintenance configurations. Use the row's power button group to draft a stop or start; it never changes allocation immediately. The buttons show **Stop / Running** while Azure reports running, or **Stopped / Start** while Azure reports stopped. Status wording follows live Azure state, not the draft. The selected choice is highlighted, inactive choices are shaded, and amber marks uncommitted changes.
 - **Advanced policy settings**: **Policies → Edit policy settings** provides DNS proxy/custom DNS servers, validated threat-intelligence IP/CIDR/range and FQDN allowlists, SNAT auto-learning, and Premium TLS inspection configuration using an existing Key Vault secret URI and user-assigned managed identity.
 - **IP groups**: browse groups across your subscriptions with the same name, subscription, resource group, location and tag filters as the resource pages. View all member addresses and create groups with validated names, IPv4 addresses, CIDRs and ranges. Creation writes directly to Azure, independently of rule drafts, and requires an existing resource group.
-- **Draft and commit**: rule changes are staged in a local candidate that survives restarts. No rule changes are sent to Azure until you commit.
-- **Review**: see a per-group diff and a risk assessment (e.g. overly broad sources, destinations, or ports) before committing. Concurrent changes made in Azure are detected using ETags.
-- **Policy snapshots and rollback**: a full snapshot of the policy is saved to shared Azure Blob Storage each time you commit, with collapsible Rule Collection Group → Rule Collection → Rules views and one-click rollback to any former state.
+- **Draft and commit**: rule, firewall-setting, policy-setting and start/stop changes are staged in a local candidate that survives restarts. These changes are not sent to Azure until you commit.
+- **Review**: see the exact changes and a risk assessment (e.g. overly broad sources, destinations, or ports) before committing. Edited fields are rechecked against fresh Azure data; see the firewall concurrency limitation below.
+- **Policy snapshots and rollback**: policy commits save cumulative snapshots to shared Azure Blob Storage, with collapsible Rule Collection Group → Rule Collection → Rules views and one-click rollback. Snapshots can include policy mode, DNS, allowlist, SNAT and TLS settings; firewall-resource changes are recorded in shared history instead.
 - **Commit history**: every commit is saved to the same shared Azure Blob Storage account as the snapshots, so you and your teammates can see who made what change and its outcome. Commits that couldn't be saved there still show on the device that made them.
 - **Flow tester**: check which rule would match a given source, destination, protocol, and port. Optionally pick the destination's web category (from the portal's Web Category Check) so web category rules can be decided.
 - **CSV import and export**: download a bundled import template and bulk-import Network, Application and DNAT rules into the selected policy's local draft, with validation and per-rule duplicate/conflict review. Export one group or an entire policy for spreadsheet reviews.
@@ -83,31 +85,53 @@ Policy snapshots include recorded DNS, allowlist, SNAT and TLS settings; older s
 
 ## Screenshots
 
-All screenshots use made-up demo data (a fictional company called Contoso); none of it comes from a real environment.
+These screenshots show **EZ AzFW Manager v1.5.0**, including the updated navigation, squared-off filters, state buttons and configuration editors. All screenshots use made-up demo data for a fictional company called Contoso; no Azure credentials or data from a real environment were used.
 
 ### See all your firewalls in one place
 
-Firewalls from every subscription you can access, grouped by subscription, with filters for name, resource group, location and tag. Choose which ones the app shows; hiding a firewall changes nothing in Azure.
+Firewalls from every subscription you can access, grouped by subscription, with filters for name, resource group, location and tag. The **State** column shows **Stop / Running** or **Stopped / Start** based on live Azure state. Clicking an action stages a draft; it does not immediately stop or start the firewall.
 
-![The Firewalls page, listing firewalls grouped by subscription](docs/images/firewalls.png)
+![EZ AzFW Manager Firewalls page with the State column, Stop and Start buttons, and square filters](docs/images/firewalls.png)
 
-![Choosing which firewalls to show, with classic-rule firewalls marked read-only](docs/images/choose-firewalls.png)
+Choose which firewalls the app shows; hiding one changes nothing in Azure. Classic-rule firewalls are identified separately.
+
+![Choosing which Contoso firewalls to show in EZ AzFW Manager](docs/images/choose-firewalls.png)
+
+Open a firewall's name to view learned SNAT prefixes, associate an existing Route Server, configure scaling and select an existing maintenance configuration.
+
+![Firewall settings with learned SNAT prefixes, Route Server, prescaling limits and maintenance configuration](docs/images/firewall-settings.png)
 
 ### Understand how policies fit together
 
-Policies are shown with their parents and children, so you can see which rules a firewall inherits and which have uncommitted changes.
+Policies are shown with their parents and children, so you can see which rules a firewall inherits and which have uncommitted changes. **Off / Alert / Deny** buttons stage threat-intelligence changes; inherited-only parent policies remain read-only.
 
-![The Policies page, showing a parent policy with two child policies and an uncommitted change](docs/images/policies.png)
+![Policy hierarchy with Off, Alert and Deny buttons and an amber uncommitted policy change](docs/images/policies.png)
+
+Use **Edit policy settings** for DNS proxy/custom DNS, validated threat-intelligence allowlists, SNAT auto-learning and Premium TLS inspection references.
+
+![Premium policy settings showing DNS proxy, IP and FQDN allowlists, SNAT auto-learning, and existing TLS certificate and identity references](docs/images/policy-settings.png)
+
+### Manage IP groups
+
+Browse IP groups across subscriptions with the same resource filters, inspect their member addresses and create groups with validated names and IPv4 addresses, CIDRs or ranges. The creation form explicitly notes that creating a group writes to Azure immediately.
+
+![IP groups page with name, subscription, resource group, location and tag filters, member addresses and the Create IP group action](docs/images/ip-groups.png)
 
 ### Edit rules in a local draft
 
 Edit rule collections and rules with pickers for IP Groups, service tags, FQDN tags and web categories. Inherited rules from a parent policy are shown read-only.
 
-![The rule collection editor, with a rule being edited](docs/images/rule-editor.png)
+![Rule collection editor with source and destination IP group pickers and validated protocol and port fields](docs/images/rule-editor.png)
+
+### Import rules with conflict review
+
+Download the bundled CSV template, fill in your rules, then review validation results before staging. Same-name rules and potential traffic overlaps are flagged individually; conflicting rows are skipped unless you explicitly choose otherwise.
+
+![CSV import preview with one ready-to-import rule, a same-name rule, overlapping traffic and per-row import choices](docs/images/import-rules.png)
 
 ### Review the diff and the risk before you commit
 
-Every change is listed, risky ones (such as a rule that allows any source to any destination on any port) are flagged, and you must acknowledge them before the commit goes ahead.
+Every selected rule or configuration change is listed. Risky changes, such as a broad HTTPS exception, are flagged and must be acknowledged before the commit goes ahead.
 
 ![The commit dialog, listing the changes and a risk warning that must be acknowledged](docs/images/commit-review.png)
 
@@ -119,7 +143,7 @@ The flow tester shows which rule would handle a given flow, in Azure's processin
 
 ### Roll back to any earlier state
 
-Each commit saves a snapshot of the whole policy to your Azure storage account. Browse a snapshot's groups, collections and rules, or roll back to it with one click.
+Policy commits save cumulative snapshots to your Azure storage account. Browse a snapshot's groups, collections, rules and recorded policy settings, or stage a rollback for review before committing it.
 
 ![The Snapshots page, with one snapshot expanded to show its rule collection groups](docs/images/snapshots.png)
 
