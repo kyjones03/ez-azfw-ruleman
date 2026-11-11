@@ -2,7 +2,7 @@ import { useId } from 'react';
 
 const SHIELD = 'M32 4 L55 12 V33 C55 46 45 56 32 60 C19 56 9 46 9 33 V12 Z';
 
-/** Original EZ AzFW Rule Manager emblem: a shield with brickwork (firewall) and a flame.
+/** Original EZ AzFW Manager emblem: a shield with brickwork (firewall) and a flame.
  *  The app icon is generated from assets/icons/logo.svg; keep the two in sync. */
 export function Logo({
   size = 32,
@@ -29,7 +29,7 @@ export function Logo({
       height={size}
       className={className}
       role="img"
-      aria-label="EZ AzFW Rule Manager logo"
+      aria-label="EZ AzFW Manager logo"
     >
       <defs>
         <linearGradient id={shieldId} x1="0" y1="0" x2="0" y2="1">

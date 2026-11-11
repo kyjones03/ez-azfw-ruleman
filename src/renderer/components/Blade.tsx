@@ -5,6 +5,7 @@ import {
   History,
   ListTree,
   LogOut,
+  Network,
   Route,
   Server,
   ShieldCheck,
@@ -17,6 +18,7 @@ export type Tab =
   | 'firewalls'
   | 'policies'
   | 'rules'
+  | 'ipGroups'
   | 'flow'
   | 'snapshots'
   | 'history';
@@ -100,6 +102,13 @@ export function Blade({
         label="Rules"
         active={tab === 'rules'}
         onClick={() => onTab('rules')}
+      />
+      <NavItem
+        open={open}
+        icon={<Network size={18} />}
+        label="IP groups"
+        active={tab === 'ipGroups'}
+        onClick={() => onTab('ipGroups')}
       />
       <NavItem
         open={open}

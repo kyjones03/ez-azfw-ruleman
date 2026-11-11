@@ -22,6 +22,7 @@ import {
   ArrowRightLeft,
   Loader2,
   Download,
+  Upload,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -42,6 +43,7 @@ import { TransferRuleDialog } from './RuleTools';
 import { TreeLines } from '../components/TreeLines';
 import { csvFileName, groupsToCsv, type CsvGroup } from '../../shared/csv';
 import { RuleLookupsContext, type LookupsState } from '../lookups';
+import { ImportRules } from './ImportRules';
 import {
   CollectionEditor,
   GroupPriorityEditor,
@@ -80,6 +82,7 @@ type ModalState =
     }
   | { kind: 'group' }
   | { kind: 'newGroup' }
+  | { kind: 'import' }
   | {
       kind: 'transfer';
       collection: string;
@@ -761,6 +764,13 @@ export function PolicyEditor({
                   }))}
                 />
               </div>
+              <button
+                className="btn-outline mt-3 w-full justify-center"
+                disabled={!view || loading}
+                onClick={() => setModal({ kind: 'import' })}
+              >
+                <Upload size={15} /> Import rules from CSV
+              </button>
             </div>
 
             {view && (
@@ -901,7 +911,7 @@ export function PolicyEditor({
                     {current.isNew && (
                       <Badge
                         tone="candidate"
-                        title="Drafted in EZ AzFW Rule Manager; created in Azure when you commit."
+                        title="Drafted in EZ AzFW Manager; created in Azure when you commit."
                       >
                         New
                       </Badge>
@@ -1479,6 +1489,26 @@ export function PolicyEditor({
             suggestedPriority={nextGroupPriority(allGroups)}
             onClose={() => setModal(null)}
             onSave={createGroup}
+          />
+        )}
+        {modal?.kind === 'import' && view && (
+          <ImportRules
+            view={view}
+            parents={parents}
+            parentError={parentError}
+            onClose={() => setModal(null)}
+            onRefresh={load}
+            onImported={async (result) => {
+              onStatus(result.status);
+              setGroupId(result.groupIds[0]);
+              setQuery('');
+              await load();
+              setModal(null);
+              toast(
+                'success',
+                `Imported ${result.ruleCount} ${result.ruleCount === 1 ? 'rule' : 'rules'} to the draft${result.skippedCount ? `; skipped ${result.skippedCount}` : ''}. Review and commit to apply them in Azure.`,
+              );
+            }}
           />
         )}
         {modal?.kind === 'transfer' && current && view && transferFrom && (

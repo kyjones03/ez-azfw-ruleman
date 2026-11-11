@@ -6,7 +6,7 @@ export type FirewallTier = 'Basic' | 'Standard' | 'Premium';
 export type ThreatIntelMode = 'Off' | 'Alert' | 'Deny';
 
 /** createdBy tag value on resources the deploy wizard creates. */
-export const APP_TAG = 'EZ AzFW Rule Manager';
+export const APP_TAG = 'EZ AzFW Manager';
 export const FIREWALL_SUBNET = 'AzureFirewallSubnet';
 export const MANAGEMENT_SUBNET = 'AzureFirewallManagementSubnet';
 export const NETWORK_API_VERSION = '2024-05-01';

@@ -44,7 +44,7 @@ jobs:
             echo "Release $RELEASE_TAG already exists"
           else
             gh release create "$RELEASE_TAG" --draft --verify-tag \
-              --title "EZ AzFW Rule Manager $RELEASE_TAG" --notes "Building…"
+              --title "EZ AzFW Manager $RELEASE_TAG" --notes "Building…"
           fi
 
   build:
@@ -150,13 +150,13 @@ jobs:
           version="${RELEASE_TAG#v}"
           missing=0
           for file in \
-            "ez-azfw-ruleman-$version-win-x64-setup.exe" \
-            "ez-azfw-ruleman-$version-win-arm64-setup.exe" \
-            "ez-azfw-ruleman-$version-win-x64-portable.exe" \
-            "ez-azfw-ruleman-$version-win-arm64-portable.exe" \
-            "ez-azfw-ruleman-$version-mac-arm64.zip" \
-            "ez-azfw-ruleman-$version-mac-x64.zip" \
-            "ez-azfw-ruleman-$version-linux-x86_64.AppImage"; do
+            "ez-azfw-manager-$version-win-x64-setup.exe" \
+            "ez-azfw-manager-$version-win-arm64-setup.exe" \
+            "ez-azfw-manager-$version-win-x64-portable.exe" \
+            "ez-azfw-manager-$version-win-arm64-portable.exe" \
+            "ez-azfw-manager-$version-mac-arm64.zip" \
+            "ez-azfw-manager-$version-mac-x64.zip" \
+            "ez-azfw-manager-$version-linux-x86_64.AppImage"; do
             if ! gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | grep -qx "$file"; then
               echo "::error::Missing release file $file"
               missing=1
@@ -192,4 +192,4 @@ jobs:
       - name: Publish
         run: |
           gh release edit "$RELEASE_TAG" --draft=false --latest \
-            --title "EZ AzFW Rule Manager $RELEASE_TAG" --notes-file notes.md
+            --title "EZ AzFW Manager $RELEASE_TAG" --notes-file notes.md

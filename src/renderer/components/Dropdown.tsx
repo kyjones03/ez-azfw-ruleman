@@ -31,6 +31,8 @@ interface DropdownProps {
   header?: ReactNode;
   widthClass?: string;
   label?: string;
+  disabled?: boolean;
+  'aria-invalid'?: boolean;
   triggerClassName?: string;
   /** Adds a search box and a fixed-height scrolling list (for long option lists). */
   searchable?: boolean;
@@ -48,6 +50,8 @@ export function Dropdown({
   header,
   widthClass = 'w-56',
   label,
+  disabled,
+  'aria-invalid': invalid,
   triggerClassName = '',
   searchable = false,
   searchPlaceholder = 'Search…',
@@ -77,6 +81,10 @@ export function Dropdown({
   const selectable = visible
     .map((it, i) => (!it.divider && !it.disabled ? i : -1))
     .filter((i) => i >= 0);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   useEffect(() => {
     if (!open) return;
@@ -216,6 +224,8 @@ export function Dropdown({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label}
+        disabled={disabled}
+        aria-invalid={invalid}
         className={triggerClassName}
         onClick={(e) => {
           e.stopPropagation();
@@ -355,6 +365,8 @@ export function SelectMenu<T extends string>({
   widthClass = 'w-72',
   label,
   searchable,
+  disabled,
+  'aria-invalid': invalid,
 }: {
   value?: T;
   options: { value: T; label: string; hint?: string; icon?: ReactNode }[];
@@ -365,15 +377,19 @@ export function SelectMenu<T extends string>({
   label?: string;
   /** Defaults to on for long lists. */
   searchable?: boolean;
+  disabled?: boolean;
+  'aria-invalid'?: boolean;
 }) {
   const current = options.find((o) => o.value === value);
   return (
     <Dropdown
       label={label}
+      disabled={disabled}
+      aria-invalid={invalid}
       widthClass={widthClass}
       searchable={searchable ?? options.length > SEARCH_THRESHOLD}
       searchPlaceholder={label ? `Search ${label.toLowerCase()}…` : 'Search…'}
-      triggerClassName={`${widthClass} flex h-8 items-center gap-2 rounded border border-line bg-ink-950 px-2.5 text-left text-sm hover:border-fg-faint`}
+      triggerClassName={`${widthClass} flex h-8 items-center gap-2 rounded border border-line bg-ink-950 px-2.5 text-left text-sm hover:border-fg-faint disabled:cursor-not-allowed disabled:opacity-50`}
       trigger={(open) => (
         <>
           {icon && <span className="text-fg-muted">{icon}</span>}

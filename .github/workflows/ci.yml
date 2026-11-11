@@ -46,7 +46,7 @@ jobs:
       - run: npm run dist
       - uses: actions/upload-artifact@v7
         with:
-          name: ez-azfw-ruleman-${{ runner.os }}
+          name: ez-azfw-manager-${{ runner.os }}
           path: |
             out/release/*.exe
             out/release/*.AppImage

@@ -6,6 +6,7 @@ export type NameKind =
   | 'policy'
   | 'vnet'
   | 'publicIp'
+  | 'ipGroup'
   | 'ruleCollectionGroup'
   | 'ruleCollection'
   | 'rule'
@@ -43,6 +44,7 @@ export const NAME_RULES: Record<NameKind, NameRule> = {
   policy: network('Policy name', 1, 80),
   vnet: network('VNet name', 2, 64),
   publicIp: network('Public IP name', 1, 80),
+  ipGroup: network('IP group name', 1, 80),
   ruleCollectionGroup: network('Rule collection group name', 1, 80),
   ruleCollection: network('Collection name', 1, 80),
   rule: network('Rule name', 1, 80),

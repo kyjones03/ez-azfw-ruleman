@@ -13,11 +13,15 @@ const GLYPH = { added: '+', modified: '~', removed: '−' };
 
 function describe(c: ChangeItem) {
   const what =
-    c.target === 'group'
-      ? 'Group settings'
-      : c.target === 'collection'
-        ? `Collection ${c.collection}`
-        : `Rule ${c.collection} / ${c.rule}`;
+    c.target === 'firewall'
+      ? 'Firewall settings'
+      : c.target === 'policy'
+        ? 'Policy settings'
+        : c.target === 'group'
+          ? 'Group settings'
+          : c.target === 'collection'
+            ? `Collection ${c.collection}`
+            : `Rule ${c.collection} / ${c.rule}`;
   return `${what}${c.detail ? `: ${c.detail}` : ''}`;
 }
 
@@ -47,8 +51,13 @@ export function CommitDialog({
   // Groups can leave the list while the dialog is open (e.g. another commit picked them up).
   const chosen = pending.filter((p) => selected.has(p.groupId));
   const riskyCount = chosen.reduce((n, p) => n + (p.warnings?.length ?? 0), 0);
+  const riskyChanges = JSON.stringify(
+    chosen
+      .filter((p) => p.warnings?.length)
+      .map((p) => [p.groupId, p.changes, p.warnings]),
+  );
   // A different set of risky changes needs a fresh acknowledgement.
-  useEffect(() => setAcknowledged(false), [riskyCount]);
+  useEffect(() => setAcknowledged(false), [riskyChanges]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +93,7 @@ export function CommitDialog({
   return (
     <Modal
       title="Commit to Azure"
-      subtitle="Groups are written to Azure one at a time. Each is checked for changes made in Azure since you started editing."
+      subtitle="Selected resources are written to Azure one at a time. Each is checked for changes made in Azure since you started editing."
       onClose={onClose}
       widthClass="max-w-3xl"
       footer={
@@ -101,8 +110,14 @@ export function CommitDialog({
               (riskyCount > 0 && !acknowledged)
             }
           >
-            Commit {chosen.length} group
-            {chosen.length === 1 ? '' : 's'}
+            Commit {chosen.length}{' '}
+            {chosen.some((p) => !!p.target)
+              ? chosen.length === 1
+                ? 'resource'
+                : 'resources'
+              : chosen.length === 1
+                ? 'group'
+                : 'groups'}
           </button>
         </>
       }
@@ -128,10 +143,14 @@ export function CommitDialog({
             <div className="flex items-center gap-2 border border-line bg-ink-900 px-3 py-2 text-xs text-fg-muted">
               <Database size={13} className="shrink-0 text-azure" />
               <span>
-                Cumulative commit snapshot will be saved to{' '}
+                {chosen.some((p) => p.target !== 'firewall')
+                  ? 'Policy snapshots and commit history will be saved to '
+                  : 'Firewall changes will be recorded in shared commit history at '}
                 <span className="font-mono text-fg">
                   {storageConfig.storageAccountName}/
-                  {storageConfig.containerName}
+                  {chosen.some((p) => p.target !== 'firewall')
+                    ? storageConfig.containerName
+                    : (storageConfig.historyContainerName ?? 'ez-azfw-history')}
                 </span>
               </span>
             </div>
@@ -157,8 +176,13 @@ export function CommitDialog({
                   className="min-w-0 flex-1 truncate text-sm font-medium text-fg"
                   title={`${p.policyName} / ${p.groupName}`}
                 >
-                  {p.policyName} <span className="text-fg-faint">/</span>{' '}
-                  {p.groupName}
+                  {p.target === 'firewall' ? p.groupName : p.policyName}{' '}
+                  <span className="text-fg-faint">/</span>{' '}
+                  {p.target === 'policy'
+                    ? 'Policy settings'
+                    : p.target === 'firewall'
+                      ? 'Firewall settings'
+                      : p.groupName}
                 </span>
                 <span className="text-xs text-fg-faint">
                   {p.changes.length} change{p.changes.length === 1 ? '' : 's'}

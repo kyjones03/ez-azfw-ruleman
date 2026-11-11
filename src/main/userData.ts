@@ -1,6 +1,6 @@
 // Where the app keeps its data (sign-in, drafts, history, and the key that encrypts saved
 // tokens). Imported first in main.ts, because other modules read userData as soon as they load.
-// Data from before the rename to EZ AzFW Rule Manager is moved over on first launch.
+// Older azurenetman data is moved over on first launch; retain this path across display-name changes.
 import { app } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';

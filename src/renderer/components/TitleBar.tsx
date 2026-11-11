@@ -30,9 +30,7 @@ export function TitleBar({
       */}
       <div className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center gap-2">
         <Logo size={16} />
-        <span className="text-sm font-semibold text-fg">
-          EZ AzFW Rule Manager
-        </span>
+        <span className="text-sm font-semibold text-fg">EZ AzFW Manager</span>
       </div>
       {onToggleBlade && (
         <button

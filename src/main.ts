@@ -1,4 +1,4 @@
-// EZ AzFW Rule Manager — main process entry point.
+// EZ AzFW Manager — main process entry point.
 // Must be first: pins the data folder before other modules read it.
 import './main/userData';
 import { app, BrowserWindow, dialog, Menu, session } from 'electron';
@@ -33,7 +33,7 @@ function createWindow(): void {
     minHeight: 680,
     show: false,
     backgroundColor: '#0F1B2D',
-    title: 'EZ AzFW Rule Manager',
+    title: 'EZ AzFW Manager',
     // Custom title bar: the renderer draws the bar; the OS keeps the native window controls.
     titleBarStyle: 'hidden',
     titleBarOverlay:
@@ -167,7 +167,7 @@ function start(): void {
     .whenReady()
     .then(onReady)
     .catch((err: Error) => {
-      dialog.showErrorBox("EZ AzFW Rule Manager couldn't start", err.message);
+      dialog.showErrorBox("EZ AzFW Manager couldn't start", err.message);
       app.quit();
     });
 }

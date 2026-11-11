@@ -597,6 +597,6 @@ describe('buildFirewallTemplate', () => {
     const fw = firewallOf(request({ tags: { env: 'prod' } })) as Res & {
       tags: Record<string, string>;
     };
-    expect(fw.tags).toEqual({ createdBy: 'EZ AzFW Rule Manager', env: 'prod' });
+    expect(fw.tags).toEqual({ createdBy: 'EZ AzFW Manager', env: 'prod' });
   });
 });

@@ -7,6 +7,22 @@ const openModals: object[] = [];
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+export function useGuardedClose(dirty: boolean, onClose: () => void) {
+  const [asking, setAsking] = useState(false);
+  return {
+    request: () => (dirty ? setAsking(true) : onClose()),
+    dialog: asking ? (
+      <ConfirmModal
+        title="Discard your edits?"
+        message="What you typed in this dialog hasn't been added to the draft yet."
+        confirmLabel="Discard"
+        onCancel={() => setAsking(false)}
+        onConfirm={onClose}
+      />
+    ) : null,
+  };
+}
+
 export function Modal({
   title,
   subtitle,

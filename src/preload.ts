@@ -18,12 +18,30 @@ const api: AzNetApi = {
   signOut: () => call(IPC.signOut),
   switchTenant: (tenantId) => call(IPC.switchTenant, tenantId),
   discoverFirewalls: () => call(IPC.discoverFirewalls),
+  discoverIpGroups: () => call(IPC.discoverIpGroups),
+  getIpGroupContext: (subscriptionId) =>
+    call(IPC.getIpGroupContext, subscriptionId),
+  createIpGroup: (request) => call(IPC.createIpGroup, request),
   getManagedFirewalls: () => call(IPC.getManagedFirewalls),
   setManagedFirewalls: (ids) => call(IPC.setManagedFirewalls, ids),
   getPolicy: (policyId) => call(IPC.getPolicy, policyId),
   stageGroup: (policyId, group) => call(IPC.stageGroup, policyId, group),
+  stagePolicyMode: (policyId, mode) =>
+    call(IPC.stagePolicyMode, policyId, mode),
+  getPolicySettings: (id) => call(IPC.getPolicySettings, id),
+  stagePolicySettings: (id, before, after) =>
+    call(IPC.stagePolicySettings, id, before, after),
+  getFirewallSettings: (id) => call(IPC.getFirewallSettings, id),
+  getFirewallConfiguration: (id) => call(IPC.getFirewallConfiguration, id),
+  getLearnedPrefixes: (id) => call(IPC.getLearnedPrefixes, id),
+  stageFirewallSettings: (id, before, after) =>
+    call(IPC.stageFirewallSettings, id, before, after),
+  stageFirewallPower: (id, state, allocation) =>
+    call(IPC.stageFirewallPower, id, state, allocation),
   createGroup: (policyId, name, priority) =>
     call(IPC.createGroup, policyId, name, priority),
+  importRulesCsv: (policyId, csv, choices) =>
+    call(IPC.importRulesCsv, policyId, csv, choices),
   getRuleLookups: (subscriptionId, location) =>
     call(IPC.getRuleLookups, subscriptionId, location),
   refresh: () => call(IPC.refresh),

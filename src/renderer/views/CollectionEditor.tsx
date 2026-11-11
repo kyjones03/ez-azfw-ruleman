@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { ConfirmModal, Modal } from '../components/Modal';
+import { ConfirmModal, Modal, useGuardedClose } from '../components/Modal';
 import { CollectionForm } from './CollectionForm';
 import { useRuleLookups } from '../lookups';
 import {
@@ -23,22 +23,6 @@ import type { RuleCollection } from '../../shared/types';
 
 const snapshot = (d: CollectionDraft) =>
   stableStringify(collectionFromDraft(d));
-
-/** Asks before closing when there are unsaved edits, so a stray Esc or click doesn't lose work. */
-function useGuardedClose(dirty: boolean, onClose: () => void) {
-  const [asking, setAsking] = useState(false);
-  const request = () => (dirty ? setAsking(true) : onClose());
-  const dialog = asking ? (
-    <ConfirmModal
-      title="Discard your edits?"
-      message="What you typed in this dialog hasn't been added to the draft yet."
-      confirmLabel="Discard"
-      onCancel={() => setAsking(false)}
-      onConfirm={onClose}
-    />
-  ) : null;
-  return { request, dialog };
-}
 
 function ErrorSummary({ count }: { count: number }) {
   if (!count) return null;

@@ -1,4 +1,11 @@
-import { Fragment, useMemo, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   ListTree,
   ChevronRight,
@@ -6,8 +13,10 @@ import {
   Plus,
   Server,
   SlidersHorizontal,
+  Settings2,
 } from 'lucide-react';
 import { EllipsisMenu } from '../components/Dropdown';
+import { Segmented } from '../components/Segmented';
 import { useResourceMenuItems } from '../components/resourceMenu';
 import { FilterBar } from '../components/FilterBar';
 import { TreeLines, treeIndent } from '../components/TreeLines';
@@ -19,7 +28,162 @@ import {
 } from '../filters';
 import { EmptyState, StatusDot } from '../components/ui';
 import { resourceName } from '../../shared/resourceId';
-import type { FirewallSummary } from '../../shared/types';
+import type { CandidateStatus, FirewallSummary } from '../../shared/types';
+import {
+  allocationErrors,
+  type FirewallConfiguration,
+  type FirewallPowerState,
+} from '../../shared/resourceSettings';
+import { errorMessage, useToast } from '../components/Toast';
+import { FirewallSettings } from './FirewallSettings';
+
+function FirewallPowerButtons({
+  firewall,
+  status,
+  reloadKey,
+  onStatus,
+  onNeedAllocation,
+  onConfiguration,
+}: {
+  firewall: FirewallSummary;
+  status: CandidateStatus;
+  reloadKey: number;
+  onStatus: (status: CandidateStatus) => void;
+  onNeedAllocation: () => void;
+  onConfiguration: (id: string, value: FirewallConfiguration) => void;
+}) {
+  const [configuration, setConfiguration] = useState<FirewallConfiguration>();
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+  const working = useRef(false);
+  const draft = status.pending.find(
+    (p) =>
+      p.target === 'firewall' &&
+      p.groupId.toLowerCase() === firewall.id.toLowerCase(),
+  );
+  const mode =
+    draft?.firewallConfiguration?.after.powerState ??
+    configuration?.powerState ??
+    'Unknown';
+  const [value, setValue] = useState<FirewallPowerState>(mode);
+  useEffect(() => {
+    setValue(mode);
+  }, [mode]);
+  useEffect(() => {
+    let cancelled = false;
+    setError('');
+    window.api
+      .getFirewallConfiguration(firewall.id)
+      .then((config) => {
+        if (!cancelled) {
+          setConfiguration(config);
+          onConfiguration(firewall.id, config);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(errorMessage(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [firewall.id, reloadKey, onConfiguration]);
+  const busy =
+    saving ||
+    status.pending.some(
+      (p) =>
+        p.committing &&
+        (p.groupId.toLowerCase() === firewall.id.toLowerCase() ||
+          (!!firewall.policyId &&
+            p.policyId.toLowerCase() === firewall.policyId.toLowerCase())),
+    );
+  const stage = async (goal: FirewallPowerState) => {
+    if (
+      busy ||
+      working.current ||
+      goal === mode ||
+      goal === 'Unknown' ||
+      !configuration
+    )
+      return;
+    if (
+      goal === 'Running' &&
+      (!configuration.allocation ||
+        allocationErrors(configuration.allocation, firewall.skuTier ?? '')
+          .length)
+    ) {
+      onNeedAllocation();
+      return;
+    }
+    working.current = true;
+    setSaving(true);
+    setValue(goal);
+    try {
+      onStatus(
+        await window.api.stageFirewallPower(
+          firewall.id,
+          goal,
+          configuration.allocation,
+        ),
+      );
+    } catch (err) {
+      setValue(mode);
+      toast('error', errorMessage(err));
+    } finally {
+      try {
+        const fresh = await window.api.getFirewallConfiguration(firewall.id);
+        setConfiguration(fresh);
+        onConfiguration(firewall.id, fresh);
+      } catch (err) {
+        setError(errorMessage(err));
+      }
+      working.current = false;
+      setSaving(false);
+    }
+  };
+  if (error)
+    return (
+      <span className="text-deny text-xs" title={error} role="status">
+        Power unavailable
+      </span>
+    );
+  if (!configuration)
+    return <span className="text-xs text-fg-faint">Loading state…</span>;
+  if (configuration.powerState === 'Unknown')
+    return (
+      <span
+        className="text-xs text-fg-faint"
+        title="Azure is updating the firewall or has not returned a settled allocation state. Refresh before starting or stopping."
+      >
+        Updating / unknown
+      </span>
+    );
+  return (
+    <div
+      className="inline-flex rounded bg-ink-900"
+      title={`${draft ? `Draft: ${mode}. ` : ''}Azure: ${configuration.powerState}. Start/stop takes effect only after commit.`}
+    >
+      <Segmented
+        label={`Power for ${firewall.name}`}
+        value={value}
+        options={(['Stopped', 'Running'] as const).map((option) => ({
+          value: option,
+          label:
+            option === configuration.powerState
+              ? option
+              : option === 'Stopped'
+                ? 'Stop'
+                : 'Start',
+          disabled: busy,
+        }))}
+        onChange={(next) => void stage(next)}
+        activeClass={() =>
+          draft ? 'bg-candidate text-ink-950' : 'bg-azure text-ink-950'
+        }
+      />
+    </div>
+  );
+}
 
 const FIREWALL_FILTERS: FilterValues<FirewallSummary> = {
   name: (f) => [f.name],
@@ -35,18 +199,33 @@ export function Firewalls({
   onOpenPolicy,
   onChooseFirewalls,
   onDeploy,
+  status,
+  onStatus,
+  reloadKey,
 }: {
   firewalls: FirewallSummary[];
   /** Opens a policy's rules. */
   onOpenPolicy: (policyId: string) => void;
   onChooseFirewalls: () => void;
   onDeploy: () => void;
+  status: CandidateStatus;
+  onStatus: (status: CandidateStatus) => void;
+  reloadKey: number;
 }) {
   const { filters, setFilter, clear, active } = useStoredFilters(
     'ez-azfw-ruleman.firewallFilters',
   );
   const resourceMenuItems = useResourceMenuItems();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [settings, setSettings] = useState<{ id: string; start?: boolean }>();
+  const [configurations, setConfigurations] = useState<
+    Record<string, FirewallConfiguration>
+  >({});
+  const recordConfiguration = useCallback(
+    (id: string, value: FirewallConfiguration) =>
+      setConfigurations((old) => ({ ...old, [id]: value })),
+    [],
+  );
   const shown = useMemo(
     () => firewalls.filter((f) => matchesFilters(f, filters, FIREWALL_FILTERS)),
     [firewalls, filters],
@@ -105,10 +284,11 @@ export function Firewalls({
         </EmptyState>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full table-fixed text-left text-sm">
+          <table className="w-full min-w-[1400px] table-fixed text-left text-sm">
             <thead className="sticky top-0 z-10 bg-ink-900 text-xs text-fg-muted">
               <tr className="border-b border-line">
                 <th className="py-2 pl-6 pr-3 font-medium">Name</th>
+                <th className="w-40 px-3 py-2 font-medium">State</th>
                 <th className="w-52 px-3 py-2 font-medium">Policy</th>
                 <th className="w-32 px-3 py-2 font-medium">Private IP</th>
                 <th className="w-44 px-3 py-2 font-medium">Resource group</th>
@@ -124,7 +304,7 @@ export function Firewalls({
                 return (
                   <Fragment key={id}>
                     <tr className="border-b border-line bg-ink-850">
-                      <td colSpan={8} className="p-0">
+                      <td colSpan={9} className="p-0">
                         <button
                           type="button"
                           aria-expanded={!isCollapsed}
@@ -169,13 +349,36 @@ export function Firewalls({
                             <TreeLines depth={1} last={i === list.length - 1} />
                             <div className="flex items-center gap-2">
                               <StatusDot state={f.provisioningState} />
-                              <span
+                              <button
                                 className="truncate"
                                 title={[f.name, ...tagPairs(f.tags)].join('\n')}
+                                onClick={() => setSettings({ id: f.id })}
                               >
                                 {f.name}
-                              </span>
+                              </button>
+                              {status.pending.some(
+                                (p) =>
+                                  p.target === 'firewall' &&
+                                  p.groupId.toLowerCase() ===
+                                    f.id.toLowerCase(),
+                              ) && (
+                                <span className="shrink-0 text-xs text-candidate">
+                                  Uncommitted
+                                </span>
+                              )}
                             </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <FirewallPowerButtons
+                              firewall={f}
+                              status={status}
+                              reloadKey={reloadKey}
+                              onStatus={onStatus}
+                              onConfiguration={recordConfiguration}
+                              onNeedAllocation={() =>
+                                setSettings({ id: f.id, start: true })
+                              }
+                            />
                           </td>
                           <td className="truncate px-3 py-2">
                             {f.policyId ? (
@@ -196,7 +399,9 @@ export function Firewalls({
                             )}
                           </td>
                           <td className="netval px-3 py-2">
-                            {f.privateIp ?? '—'}
+                            {configurations[f.id]
+                              ? (configurations[f.id].privateIp ?? '—')
+                              : (f.privateIp ?? '—')}
                           </td>
                           <td
                             className="truncate px-3 py-2 text-fg-muted"
@@ -219,6 +424,11 @@ export function Firewalls({
                             <EllipsisMenu
                               label={`Actions for ${f.name}`}
                               items={[
+                                {
+                                  label: 'Edit firewall settings',
+                                  icon: <Settings2 size={14} />,
+                                  onSelect: () => setSettings({ id: f.id }),
+                                },
                                 ...(f.policyId
                                   ? [
                                       {
@@ -241,7 +451,7 @@ export function Firewalls({
               {!shown.length && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-6 py-6 text-center text-fg-muted"
                   >
                     No firewalls match these filters.
@@ -251,6 +461,14 @@ export function Firewalls({
             </tbody>
           </table>
         </div>
+      )}
+      {settings && (
+        <FirewallSettings
+          firewallId={settings.id}
+          startRequested={settings.start}
+          onStatus={onStatus}
+          onClose={() => setSettings(undefined)}
+        />
       )}
     </div>
   );

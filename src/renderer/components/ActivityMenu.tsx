@@ -259,7 +259,7 @@ function describe(item: Item) {
         icon: <AlertTriangle size={16} className="text-candidate" />,
         title: 'Commit interrupted',
         detail:
-          'EZ AzFW Rule Manager was closed while this commit ran. Reload the policy to see what was saved.',
+          'EZ AzFW Manager was closed while this commit ran. Reload the policy to see what was saved.',
       };
     const current = p.groups[p.index];
     // Groups whose state has a verb here are still waiting or in progress.
@@ -293,7 +293,7 @@ function describe(item: Item) {
       icon: <AlertTriangle size={16} className="text-candidate" />,
       title: `Deployment of ${p.firewallName}`,
       detail:
-        'EZ AzFW Rule Manager was closed while this ran. Check the result in the Azure portal.',
+        'EZ AzFW Manager was closed while this ran. Check the result in the Azure portal.',
     };
   }
   if (p.phase === 'succeeded')

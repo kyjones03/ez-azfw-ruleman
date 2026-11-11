@@ -1,10 +1,10 @@
 # Contributing
 
-Thanks for your interest in improving EZ AzFW Rule Manager!
+Thanks for your interest in improving EZ AzFW Manager!
 
 ## Reporting issues
 
-- Search [existing issues](https://github.com/samsmith-MSFT/ez-azfw-ruleman/issues) first.
+- Search [existing issues](https://github.com/samsmith-MSFT/ez-azfw-manager/issues) first.
 - Include the app version, your OS, steps to reproduce, and what you expected. Remove subscription IDs, IP addresses, and other sensitive details from screenshots and logs.
 - Report security vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 

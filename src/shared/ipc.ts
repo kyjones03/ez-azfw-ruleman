@@ -7,6 +7,7 @@ import type {
   CommitRecord,
   CreateSnapshotStorageRequest,
   FirewallSummary,
+  IpGroupInfo,
   PolicySnapshot,
   PolicyView,
   RuleCollectionGroup,
@@ -22,6 +23,16 @@ import type {
   NetworkAvailability,
   SubscriptionInfo,
 } from './deploy';
+import type { CreateIpGroupRequest, IpGroupContext } from './ipGroups';
+import type { RuleImportChoices, RuleImportResult } from './ruleImport';
+import type { ThreatIntelMode } from './deploy';
+import type {
+  FirewallAllocation,
+  FirewallConfiguration,
+  FirewallSettingsView,
+  PolicyAdvancedSettings,
+  PolicySettingsView,
+} from './resourceSettings';
 
 export const IPC = {
   signIn: 'auth:signIn',
@@ -31,11 +42,23 @@ export const IPC = {
   signOut: 'auth:signOut',
   switchTenant: 'auth:switchTenant',
   discoverFirewalls: 'firewalls:discover',
+  discoverIpGroups: 'ipGroups:discover',
+  getIpGroupContext: 'ipGroups:context',
+  createIpGroup: 'ipGroups:create',
   getManagedFirewalls: 'firewalls:getManaged',
   setManagedFirewalls: 'firewalls:setManaged',
   getPolicy: 'policy:get',
   stageGroup: 'candidate:stage',
+  stagePolicyMode: 'candidate:stagePolicyMode',
+  getPolicySettings: 'policy:settings',
+  stagePolicySettings: 'candidate:stagePolicySettings',
+  getFirewallSettings: 'firewall:settings',
+  getFirewallConfiguration: 'firewall:configuration',
+  getLearnedPrefixes: 'firewall:learnedPrefixes',
+  stageFirewallSettings: 'candidate:stageFirewallSettings',
+  stageFirewallPower: 'candidate:stageFirewallPower',
   createGroup: 'candidate:createGroup',
+  importRulesCsv: 'candidate:importRulesCsv',
   getRuleLookups: 'rules:lookups',
   refresh: 'app:refresh',
   getCandidateStatus: 'candidate:status',
@@ -74,6 +97,10 @@ export interface AzNetApi {
   /** Switches the directory (tenant) all Azure calls use. */
   switchTenant(tenantId: string): Promise<AccountInfo>;
   discoverFirewalls(): Promise<FirewallSummary[]>;
+  discoverIpGroups(): Promise<IpGroupInfo[]>;
+  getIpGroupContext(subscriptionId: string): Promise<IpGroupContext>;
+  /** Creates an IP group directly in Azure, outside the rule candidate workflow. */
+  createIpGroup(request: CreateIpGroupRequest): Promise<IpGroupInfo>;
   getManagedFirewalls(): Promise<string[]>;
   setManagedFirewalls(ids: string[]): Promise<void>;
   getPolicy(policyId: string): Promise<PolicyView>;
@@ -81,12 +108,41 @@ export interface AzNetApi {
     policyId: string,
     group: RuleCollectionGroup,
   ): Promise<CandidateStatus>;
+  stagePolicyMode(
+    policyId: string,
+    mode: ThreatIntelMode,
+  ): Promise<CandidateStatus>;
+  getPolicySettings(policyId: string): Promise<PolicySettingsView>;
+  stagePolicySettings(
+    policyId: string,
+    before: PolicyAdvancedSettings,
+    after: PolicyAdvancedSettings,
+  ): Promise<CandidateStatus>;
+  getFirewallSettings(firewallId: string): Promise<FirewallSettingsView>;
+  getFirewallConfiguration(firewallId: string): Promise<FirewallConfiguration>;
+  getLearnedPrefixes(firewallId: string): Promise<string[]>;
+  stageFirewallSettings(
+    firewallId: string,
+    before: FirewallConfiguration,
+    after: FirewallConfiguration,
+  ): Promise<CandidateStatus>;
+  stageFirewallPower(
+    firewallId: string,
+    state: 'Running' | 'Stopped',
+    allocation?: FirewallAllocation,
+  ): Promise<CandidateStatus>;
   /** Drafts a new, empty rule collection group; it's created in Azure on commit. */
   createGroup(
     policyId: string,
     name: string,
     priority: number,
   ): Promise<CandidateStatus>;
+  /** Stages a validated CSV file; never writes rules to Azure until commit. */
+  importRulesCsv(
+    policyId: string,
+    csv: string,
+    choices: RuleImportChoices,
+  ): Promise<RuleImportResult>;
   getCandidateStatus(): Promise<CandidateStatus>;
   /** IP Groups, service tags, FQDN tags and web categories for the rule editor's pickers. */
   getRuleLookups(

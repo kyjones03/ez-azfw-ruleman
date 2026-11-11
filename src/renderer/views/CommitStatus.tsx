@@ -47,6 +47,7 @@ function StateIcon({ state }: { state: CommitGroupState }) {
 function commitGroups(data: CommitStatusData) {
   if (data.progress) return data.progress.groups;
   return (data.record?.results ?? []).map((r) => ({
+    target: r.target,
     groupId: r.groupId,
     groupName: r.groupName,
     policyName: r.policyName,
@@ -92,7 +93,7 @@ export function CommitStatus({
   const title = data.stale
     ? 'Commit interrupted'
     : !done
-      ? `Committing ${groups.length} ${groups.length === 1 ? 'group' : 'groups'}…`
+      ? `Committing ${groups.length} ${groups.some((g) => !!g.target) ? (groups.length === 1 ? 'resource' : 'resources') : groups.length === 1 ? 'group' : 'groups'}…`
       : failed
         ? `Commit finished with ${failed} ${failed === 1 ? 'problem' : 'problems'}`
         : 'Commit succeeded';
@@ -118,16 +119,16 @@ export function CommitStatus({
         <div className="mb-3 flex gap-2 border border-candidate/40 bg-candidate/10 p-3 text-xs text-candidate">
           <AlertTriangle size={16} className="shrink-0" />
           <p>
-            EZ AzFW Rule Manager was closed while this commit was running.
-            Groups marked as in progress may or may not have been saved; reload
-            the policy to see what's in Azure.
+            EZ AzFW Manager was closed while this commit was running. Resources
+            marked as in progress may or may not have been saved; reload the
+            policy to see what's in Azure.
           </p>
         </div>
       )}
       {!done && !data.stale && current && (
         <p className="mb-3 text-sm text-fg-muted">
-          {STATE_LABEL[current.state]} {current.groupName}… Groups are written
-          one at a time.
+          {STATE_LABEL[current.state]} {current.groupName}… Resources are
+          written one at a time.
         </p>
       )}
       <ul className="divide-y divide-line border border-line">
@@ -145,8 +146,13 @@ export function CommitStatus({
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-fg">
-                {g.policyName} <span className="text-fg-faint">/</span>{' '}
-                {g.groupName}
+                {g.target === 'firewall' ? g.groupName : g.policyName}{' '}
+                <span className="text-fg-faint">/</span>{' '}
+                {g.target === 'policy'
+                  ? 'Policy settings'
+                  : g.target === 'firewall'
+                    ? 'Firewall settings'
+                    : g.groupName}
               </p>
               {g.error && (
                 <p className="mt-0.5 whitespace-pre-line text-xs text-fg-muted">

@@ -10,6 +10,7 @@ import { DirectoryChooser } from './views/DirectoryChooser';
 import { FirewallPicker } from './views/FirewallPicker';
 import { Firewalls } from './views/Firewalls';
 import { Policies } from './views/Policies';
+import { IpGroups } from './views/IpGroups';
 import { FlowTesterPage } from './views/FlowTesterPage';
 import type { FlowHit } from '../shared/flow';
 import { PolicyEditor, type PolicyOption } from './views/PolicyEditor';
@@ -404,7 +405,7 @@ export default function App() {
       ? `Last automatic refresh failed: ${refreshError}`
       : lastRefreshed
         ? `Last refreshed ${lastRefreshed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
-        : 'Reload firewalls, policies and rules from Azure',
+        : 'Reload firewalls, policies, rules and IP groups from Azure',
     autoRefreshMin
       ? `Auto-refresh every ${autoRefreshMin} min`
       : 'Auto-refresh is off',
@@ -549,7 +550,16 @@ export default function App() {
           onSwitchTenant={switchTenant}
         />
         <main className="flex min-w-0 flex-1 flex-col">
-          {stage === 'select' ? (
+          {tab === 'ipGroups' ? (
+            <IpGroups
+              key={account.tenantId}
+              reloadKey={reloadKey}
+              defaultSubscriptionId={
+                (managed[0] ?? firewalls[0])?.subscriptionId
+              }
+              onCreated={() => setReloadKey((k) => k + 1)}
+            />
+          ) : stage === 'select' ? (
             <FirewallPicker
               firewalls={firewalls}
               loading={discovering}
@@ -574,6 +584,9 @@ export default function App() {
                   onOpenPolicy={openPolicy}
                   onChooseFirewalls={() => setStage('select')}
                   onDeploy={openDeploy}
+                  status={status}
+                  onStatus={setStatus}
+                  reloadKey={reloadKey}
                 />
               )}
               {tab === 'policies' && (
@@ -583,6 +596,7 @@ export default function App() {
                   status={status}
                   reloadKey={reloadKey}
                   onOpenPolicy={openPolicy}
+                  onStatus={setStatus}
                 />
               )}
               {tab === 'rules' && (
@@ -666,7 +680,7 @@ export default function App() {
                 toast(
                   failed ? 'error' : 'success',
                   failed
-                    ? `${failed} of ${r.results.length} groups failed to commit. Open the activity bell for details.`
+                    ? `${failed} of ${r.results.length} ${r.results.some((result) => !!result.target) ? 'resources' : 'groups'} failed to commit. Open the activity bell for details.`
                     : 'Committed to Azure.',
                 );
                 if (r.snapshotError) toast('error', r.snapshotError);

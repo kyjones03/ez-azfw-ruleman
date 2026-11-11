@@ -1,6 +1,20 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ChevronRight, KeyRound, ListTree, ShieldCheck } from 'lucide-react';
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  ChevronRight,
+  KeyRound,
+  ListTree,
+  Settings2,
+  ShieldCheck,
+} from 'lucide-react';
 import { EllipsisMenu } from '../components/Dropdown';
+import { Segmented } from '../components/Segmented';
 import { useResourceMenuItems } from '../components/resourceMenu';
 import { EmptyState, Spinner } from '../components/ui';
 import { parseResourceId, sameResourceId } from '../../shared/resourceId';
@@ -15,7 +29,69 @@ import {
 import type { CandidateStatus, PolicyView } from '../../shared/types';
 import type { PolicyOption } from './PolicyEditor';
 import { MAX_POLICY_DEPTH } from '../policyChain';
-import { errorMessage } from '../components/Toast';
+import { errorMessage, useToast } from '../components/Toast';
+import { isThreatIntelMode, THREAT_INTEL_MODES } from '../../shared/policyMode';
+import type { ThreatIntelMode } from '../../shared/deploy';
+import { PolicySettings } from './PolicySettings';
+
+function PolicyModeButtons({
+  mode,
+  name,
+  disabled,
+  drafted,
+  onStage,
+}: {
+  mode: ThreatIntelMode;
+  name: string;
+  disabled: boolean;
+  drafted: boolean;
+  onStage: (mode: ThreatIntelMode) => Promise<boolean>;
+}) {
+  const [value, setValue] = useState(mode);
+  const [saving, setSaving] = useState(false);
+  const committing = useRef(false);
+  useEffect(() => {
+    setValue(mode);
+  }, [mode]);
+  const stage = async (next: ThreatIntelMode) => {
+    if (disabled || committing.current || next === mode) return;
+    committing.current = true;
+    setSaving(true);
+    setValue(next);
+    try {
+      if (!(await onStage(next))) {
+        setValue(mode);
+      }
+    } finally {
+      committing.current = false;
+      setSaving(false);
+    }
+  };
+  return (
+    <div
+      className="inline-flex rounded bg-ink-900"
+      title={
+        disabled
+          ? 'Inherited-only parent policies are read-only, or this policy is being committed.'
+          : `${value}. Changes stay in your draft until committed.`
+      }
+    >
+      <Segmented
+        label={`Threat intelligence for ${name}`}
+        value={value}
+        options={THREAT_INTEL_MODES.map((option) => ({
+          value: option,
+          label: option,
+          disabled: disabled || saving,
+        }))}
+        onChange={(next) => void stage(next)}
+        activeClass={() =>
+          drafted ? 'bg-candidate text-ink-950' : 'bg-azure text-ink-950'
+        }
+      />
+    </div>
+  );
+}
 
 interface Row {
   id: string;
@@ -40,6 +116,7 @@ export function Policies({
   reloadKey,
   onOpenPolicy,
   subscriptionNames,
+  onStatus,
 }: {
   policies: PolicyOption[];
   /** Display names by lower-cased subscription ID. */
@@ -47,12 +124,15 @@ export function Policies({
   status: CandidateStatus;
   reloadKey: number;
   onOpenPolicy: (policyId: string) => void;
+  onStatus: (status: CandidateStatus) => void;
 }) {
   const [views, setViews] = useState<
     Record<string, { view?: PolicyView; error?: string }>
   >({});
   const [loading, setLoading] = useState(false);
   const resourceMenuItems = useResourceMenuItems();
+  const toast = useToast();
+  const [settingsId, setSettingsId] = useState<string>();
 
   useEffect(() => {
     let cancelled = false;
@@ -181,7 +261,7 @@ export function Policies({
 
   const pendingFor = (id: string) =>
     status.pending
-      .filter((p) => sameResourceId(p.policyId, id))
+      .filter((p) => p.target !== 'firewall' && sameResourceId(p.policyId, id))
       .reduce((n, p) => n + p.changes.length, 0);
 
   const renderRow = (
@@ -203,6 +283,14 @@ export function Policies({
     const p = r.view?.policy;
     const pending = pendingFor(r.id);
     const childCount = p?.childPolicyIds.length ?? 0;
+    const policyDraft = status.pending.find(
+      (change) =>
+        change.target === 'policy' && sameResourceId(change.policyId, r.id),
+    );
+    const mode = policyDraft?.policyMode?.after ?? p?.threatIntelMode;
+    const committing = status.pending.some(
+      (change) => change.committing && sameResourceId(change.policyId, r.id),
+    );
     return (
       <tr key={r.id} className="border-b border-line/60 hover:bg-ink-850">
         <td
@@ -256,7 +344,37 @@ export function Policies({
         </td>
         <td className="px-3 py-2 text-fg-muted">{p?.tier ?? '—'}</td>
         <td className="px-3 py-2 text-fg-muted">{p?.location ?? '—'}</td>
-        <td className="px-3 py-2 text-fg-muted">{p?.threatIntelMode ?? '—'}</td>
+        <td className="px-3 py-2 text-fg-muted">
+          {isThreatIntelMode(mode) ? (
+            <PolicyModeButtons
+              mode={mode}
+              name={r.name}
+              disabled={!r.managed || committing}
+              drafted={!!policyDraft?.policyMode}
+              onStage={async (next) => {
+                try {
+                  onStatus(await window.api.stagePolicyMode(r.id, next));
+                  return true;
+                } catch (err) {
+                  toast('error', errorMessage(err));
+                  return false;
+                }
+              }}
+            />
+          ) : (
+            <span title="Refresh to load a supported threat-intelligence mode.">
+              {mode ?? '—'}
+            </span>
+          )}
+          {policyDraft?.policyMode &&
+            isThreatIntelMode(p?.threatIntelMode) &&
+            p.threatIntelMode !== policyDraft.policyMode.before &&
+            p.threatIntelMode !== policyDraft.policyMode.after && (
+              <p className="mt-1 text-[11px] text-deny" role="alert">
+                Changed in Azure; discard and refresh before retrying.
+              </p>
+            )}
+        </td>
         <td className="px-3 py-2 text-right tabular-nums text-fg-muted">
           {r.view ? (
             <span
@@ -278,6 +396,12 @@ export function Policies({
             items={[
               ...(r.managed
                 ? [
+                    {
+                      label: 'Edit policy settings',
+                      icon: <Settings2 size={14} />,
+                      disabled: committing,
+                      onSelect: () => setSettingsId(r.id),
+                    },
                     {
                       label: 'Edit rules',
                       icon: <ListTree size={14} />,
@@ -321,7 +445,8 @@ export function Policies({
             to your firewalls
             {parentCount > 0 &&
               `, plus ${parentCount} parent ${parentCount === 1 ? 'policy' : 'policies'} they inherit from`}
-            .
+            . Threat-intelligence buttons change the local draft; save and
+            commit to apply them.
           </p>
         </div>
         {loading && <Spinner label="Loading policy details…" />}
@@ -347,14 +472,14 @@ export function Policies({
         </EmptyState>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full table-fixed text-left text-sm">
+          <table className="w-full min-w-[1100px] table-fixed text-left text-sm">
             <thead className="sticky top-0 z-10 bg-ink-900 text-xs text-fg-muted">
               <tr className="border-b border-line">
                 <th className="py-2 pl-6 pr-3 font-medium">Name</th>
                 <th className="w-64 px-3 py-2 font-medium">Applied to</th>
                 <th className="w-24 px-3 py-2 font-medium">Tier</th>
                 <th className="w-40 px-3 py-2 font-medium">Region</th>
-                <th className="w-32 px-3 py-2 font-medium">Threat intel</th>
+                <th className="w-44 px-3 py-2 font-medium">Threat intel</th>
                 <th
                   className="w-40 px-3 py-2 text-right font-medium"
                   title="Own rule collection groups / collections / rules (inherited rules not counted)"
@@ -419,6 +544,13 @@ export function Policies({
             </tbody>
           </table>
         </div>
+      )}
+      {settingsId && (
+        <PolicySettings
+          policyId={settingsId}
+          onStatus={onStatus}
+          onClose={() => setSettingsId(undefined)}
+        />
       )}
     </div>
   );

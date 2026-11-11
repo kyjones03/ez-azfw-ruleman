@@ -1,11 +1,12 @@
 # Wraps the app that Electron Forge already built and hardened (`electron-forge package`) into
 # single-file executables. Run through `npm run dist`, which passes --prepackaged.
+# Retain the original appId so installers upgrade existing installations.
 appId: com.samsmithmsft.ezazfwruleman
-productName: EZ AzFW Rule Manager
+productName: EZ AzFW Manager
 copyright: Copyright (c) 2026 samsmith-MSFT
 # Must match Forge's packagerConfig.executableName; the portable launcher starts this file.
-executableName: ez-azfw-ruleman
-artifactName: ez-azfw-ruleman-${version}-${os}-${arch}.${ext}
+executableName: ez-azfw-manager
+artifactName: ez-azfw-manager-${version}-${os}-${arch}.${ext}
 directories:
   output: out/release
 publish: null
@@ -20,7 +21,7 @@ win:
   signAndEditExecutable: false
 
 nsis:
-  artifactName: ez-azfw-ruleman-${version}-win-${arch}-setup.${ext}
+  artifactName: ez-azfw-manager-${version}-win-${arch}-setup.${ext}
   # Standard install: asks for administrator rights, then installs for all users under
   # C:\Program Files by default (the wizard lets people pick another folder or drive).
   oneClick: false
@@ -28,15 +29,15 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: EZ AzFW Rule Manager
+  shortcutName: EZ AzFW Manager
   runAfterFinish: true
   # Drafts, history and sign-in live in %APPDATA%\ez-azfw-ruleman; uninstalling keeps them.
   deleteAppDataOnUninstall: false
 
 portable:
-  artifactName: ez-azfw-ruleman-${version}-win-${arch}-portable.${ext}
+  artifactName: ez-azfw-manager-${version}-win-${arch}-portable.${ext}
   # Unpack to a stable folder so later launches start faster.
-  unpackDirName: ez-azfw-ruleman
+  unpackDirName: ez-azfw-manager
 
 linux:
   target: AppImage

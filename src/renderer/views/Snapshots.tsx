@@ -636,8 +636,8 @@ function StorageSetupCard({
               container soft delete ({softDeleteDays || 30} days)
             </span>
             , <span className="text-fg">blob versioning</span>, HTTPS-only, and
-            tags it so teammates using EZ AzFW Rule Manager automatically
-            connect to the same snapshot store.
+            tags it so teammates using EZ AzFW Manager automatically connect to
+            the same snapshot store.
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2">
@@ -1090,6 +1090,24 @@ export function Snapshots({
 
                   {snapOpen && (
                     <div className="border-t border-line bg-ink-950 px-4 py-3">
+                      {snap.threatIntelMode && (
+                        <p className="mb-3 text-sm text-fg-muted">
+                          Threat intelligence:{' '}
+                          <strong className="text-fg">
+                            {snap.threatIntelMode}
+                          </strong>
+                        </p>
+                      )}
+                      {snap.settings && (
+                        <details className="mb-3 text-xs text-fg-muted">
+                          <summary className="cursor-pointer">
+                            Recorded DNS, allowlist, SNAT and TLS settings
+                          </summary>
+                          <pre className="mt-2 overflow-auto whitespace-pre-wrap break-words font-mono">
+                            {JSON.stringify(snap.settings, null, 2)}
+                          </pre>
+                        </details>
+                      )}
                       {!snap.groups.length ? (
                         <p className="text-xs text-fg-faint">
                           This policy had no rule collection groups in this
@@ -1340,7 +1358,7 @@ export function Snapshots({
       {confirmRestore && (
         <ConfirmModal
           title={`Roll back ${confirmRestore.policyName}?`}
-          message={`This stages the policy state from ${new Date(confirmRestore.time).toLocaleString()} into your local draft, replacing any uncommitted edits on ${confirmRestore.policyName}. You can review the changes in Rules before committing them to Azure.`}
+          message={`This stages the policy state from ${new Date(confirmRestore.time).toLocaleString()} into your local draft, replacing uncommitted rule edits on ${confirmRestore.policyName}.${confirmRestore.threatIntelMode ? ` Threat intelligence will also be restored to ${confirmRestore.threatIntelMode}.` : ' This snapshot does not change threat-intelligence mode.'}${confirmRestore.settings ? ' Recorded DNS, allowlist, SNAT and TLS settings will also be restored.' : ' This older snapshot leaves advanced policy-setting drafts unchanged.'} Review the draft before committing it to Azure.`}
           confirmLabel="Roll back to state"
           onCancel={() => setConfirmRestore(null)}
           onConfirm={() => handleRestore(confirmRestore)}

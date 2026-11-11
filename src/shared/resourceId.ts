@@ -42,6 +42,7 @@ export function parseResourceId(id: string): ParsedResourceId {
 
 export const RESOURCE_TYPES = {
   firewall: 'Microsoft.Network/azureFirewalls',
+  ipGroup: 'Microsoft.Network/ipGroups',
   policy: 'Microsoft.Network/firewallPolicies',
   ruleCollectionGroup:
     'Microsoft.Network/firewallPolicies/ruleCollectionGroups',
@@ -49,6 +50,9 @@ export const RESOURCE_TYPES = {
   virtualHub: 'Microsoft.Network/virtualHubs',
   deployment: 'Microsoft.Resources/deployments',
   storageAccount: 'Microsoft.Storage/storageAccounts',
+  maintenanceConfiguration: 'Microsoft.Maintenance/maintenanceConfigurations',
+  publicIp: 'Microsoft.Network/publicIPAddresses',
+  subnet: 'Microsoft.Network/virtualNetworks/subnets',
 } as const;
 
 export function isResourceIdOfType(id: unknown, type: string): id is string {

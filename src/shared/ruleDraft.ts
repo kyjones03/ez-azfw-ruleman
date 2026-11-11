@@ -21,6 +21,7 @@ import type {
   NetworkProtocol,
   NetworkRule,
   RuleCollection,
+  RuleLookups,
 } from './types';
 
 /** Azure collections are typed: every rule in a collection has the collection's type. */
@@ -452,6 +453,32 @@ export interface KnownValues {
   serviceTags?: Set<string>;
   fqdnTags?: Set<string>;
   webCategories?: Set<string>;
+}
+
+export function knownValuesFromLookups(
+  lookups: RuleLookups | undefined,
+): KnownValues {
+  if (!lookups) return {};
+  const known = (label: string, values: string[]) =>
+    !lookups.errors.some((e) => e.toLowerCase().includes(label)) &&
+    values.length
+      ? new Set(values.map((v) => v.toLowerCase()))
+      : undefined;
+  return {
+    ipGroups: known(
+      'ip groups',
+      lookups.ipGroups.map((g) => g.id),
+    ),
+    serviceTags: known(
+      'service tags',
+      lookups.serviceTags.map((t) => t.name),
+    ),
+    fqdnTags: known('fqdn tags', lookups.fqdnTags),
+    webCategories: known(
+      'web categories',
+      lookups.webCategories.map((c) => c.name),
+    ),
+  };
 }
 
 const lower = (v: string) => v.trim().toLowerCase();

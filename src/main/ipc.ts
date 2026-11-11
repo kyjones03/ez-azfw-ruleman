@@ -28,11 +28,29 @@ import {
 import * as auth from './auth';
 import * as azure from './azure';
 import * as deploy from './deploy';
+import * as ipGroups from './ipGroups';
+import { MAX_IP_GROUP_ADDRESSES } from '../shared/ipGroups';
+import { importRulesCsv } from './ruleImport';
+import {
+  MAX_RULE_IMPORT_BYTES,
+  type RuleImportChoices,
+} from '../shared/ruleImport';
 import * as snapshotStorage from './snapshotStorage';
 import { candidate } from './candidate';
 import { clearLookupCache, getRuleLookups } from './lookups';
 import { loadState, updateState } from './store';
 import { isAppUrl } from './appProtocol';
+import { isThreatIntelMode, type PolicyModeConfig } from '../shared/policyMode';
+import * as resourceSettings from './resourceSettings';
+import {
+  mergeSettings,
+  sanitizeAllocation,
+  sanitizeFirewallConfiguration,
+  sanitizePolicySettings,
+  FIREWALL_SETTING_KEYS,
+  POLICY_SETTING_KEYS,
+  type FirewallConfiguration,
+} from '../shared/resourceSettings';
 
 const runningCache = new Map<string, RuleCollectionGroup>();
 auth.onSignOut(() => runningCache.clear());
@@ -98,6 +116,15 @@ function assertGroup(value: unknown): asserts value is RuleCollectionGroup {
   }
 }
 
+function assertCandidateId(value: unknown): asserts value is string {
+  if (
+    !isResourceIdOfType(value, RESOURCE_TYPES.ruleCollectionGroup) &&
+    !isResourceIdOfType(value, RESOURCE_TYPES.policy) &&
+    !isResourceIdOfType(value, RESOURCE_TYPES.firewall)
+  )
+    throw new Error('Invalid draft resource ID.');
+}
+
 export function registerIpc(getContents: () => WebContents | undefined): void {
   // Progress keeps coming after the window is closed (e.g. on macOS); drop it then.
   const send = (channel: string, payload: unknown) => {
@@ -121,6 +148,34 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
   });
 
   handle(IPC.discoverFirewalls, () => azure.discoverFirewalls());
+  handle(IPC.discoverIpGroups, () => ipGroups.discoverIpGroups());
+  handle(IPC.getIpGroupContext, (_e, subscriptionId: unknown) =>
+    ipGroups.getIpGroupContext(assertSubscription(subscriptionId)),
+  );
+  handle(IPC.createIpGroup, async (_e, raw: unknown) => {
+    if (!raw || typeof raw !== 'object')
+      throw new Error('Invalid IP group request.');
+    const r = raw as Record<string, unknown>;
+    if (
+      !Array.isArray(r.addresses) ||
+      r.addresses.length > MAX_IP_GROUP_ADDRESSES ||
+      !r.addresses.every(
+        (address): address is string => typeof address === 'string',
+      )
+    )
+      throw new Error('Invalid IP group address list (at most 5000 entries).');
+    const group = await ipGroups.createIpGroup({
+      subscriptionId: assertSubscription(r.subscriptionId),
+      resourceGroup: str(r.resourceGroup, 'resource group'),
+      location: str(r.location, 'location'),
+      name: str(r.name, 'IP group name'),
+      addresses: [
+        ...new Set(r.addresses.map((address) => str(address, 'IP address'))),
+      ],
+    });
+    clearLookupCache();
+    return group;
+  });
   handle(IPC.getManagedFirewalls, () => loadState().managedFirewallIds);
   handle(IPC.setManagedFirewalls, (_e, ids: unknown) => {
     if (!Array.isArray(ids) || ids.length > 5000)
@@ -159,6 +214,23 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
     return candidate.stage(policyId, group, running);
   });
 
+  handle(IPC.stagePolicyMode, async (_e, policyId: unknown, mode: unknown) => {
+    assertId(policyId, RESOURCE_TYPES.policy, 'firewall policy');
+    if (!isThreatIntelMode(mode))
+      throw new Error('Unsupported threat-intelligence mode.');
+    const policy = await azure.getPolicy(policyId);
+    if (!isThreatIntelMode(policy.threatIntelMode))
+      throw new Error(
+        'Azure did not return a supported threat-intelligence mode. Refresh the policy before editing it.',
+      );
+    await azure.validatePolicyMode(policy, mode);
+    return candidate.stagePolicyMode(policyId, mode, {
+      name: policy.name,
+      threatIntelMode: policy.threatIntelMode,
+      settings: policy.settings,
+    });
+  });
+
   handle(
     IPC.createGroup,
     async (_e, policyId: unknown, name: unknown, priority: unknown) => {
@@ -172,7 +244,168 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
     },
   );
 
+  handle(IPC.getPolicySettings, async (_e, id: unknown) => {
+    assertId(id, RESOURCE_TYPES.policy, 'firewall policy');
+    const view = await resourceSettings.getPolicySettings(id);
+    view.draft = candidate.effectivePolicyConfiguration(id, {
+      name: view.name,
+      threatIntelMode: view.threatIntelMode,
+      settings: view.running,
+    }).settings;
+    return view;
+  });
+  handle(
+    IPC.stagePolicySettings,
+    async (_e, id: unknown, before: unknown, after: unknown) => {
+      assertId(id, RESOURCE_TYPES.policy, 'firewall policy');
+      const initial = sanitizePolicySettings(before);
+      const desired = sanitizePolicySettings(after);
+      const running = await resourceSettings.getPolicyConfiguration(id);
+      const effective = candidate.effectivePolicyConfiguration(id, running);
+      const merged = mergeSettings(
+        initial,
+        desired,
+        effective.settings ?? running.settings,
+        POLICY_SETTING_KEYS,
+      );
+      await resourceSettings.validatePolicyConfiguration(
+        id,
+        merged,
+        running.settings,
+      );
+      return candidate.stagePolicyConfiguration(
+        id,
+        { ...effective, settings: merged },
+        running,
+      );
+    },
+  );
+  handle(IPC.getFirewallSettings, async (_e, id: unknown) => {
+    assertId(id, RESOURCE_TYPES.firewall, 'firewall');
+    const view = await resourceSettings.getFirewallSettings(id);
+    view.draft = candidate.effectiveFirewallConfiguration(id, view.running);
+    return view;
+  });
+  handle(IPC.getFirewallConfiguration, async (_e, id: unknown) => {
+    assertId(id, RESOURCE_TYPES.firewall, 'firewall');
+    return resourceSettings.getFirewallConfiguration(id);
+  });
+  handle(IPC.getLearnedPrefixes, async (_e, id: unknown) => {
+    assertId(id, RESOURCE_TYPES.firewall, 'firewall');
+    return resourceSettings.getLearnedPrefixes(id);
+  });
+  handle(
+    IPC.stageFirewallSettings,
+    async (_e, id: unknown, before: unknown, after: unknown) => {
+      assertId(id, RESOURCE_TYPES.firewall, 'firewall');
+      const initial = sanitizeFirewallConfiguration(before);
+      const desired = sanitizeFirewallConfiguration(after);
+      const running = await resourceSettings.getFirewallDraftContext(
+        id,
+        initial.maintenanceConfigurationIds !== undefined ||
+          desired.maintenanceConfigurationIds !== undefined,
+      );
+      const effective = candidate.effectiveFirewallConfiguration(
+        id,
+        running.configuration,
+      );
+      const merged = mergeSettings(
+        initial,
+        desired,
+        effective,
+        FIREWALL_SETTING_KEYS,
+      );
+      merged.allocation = desired.allocation ?? effective.allocation;
+      await resourceSettings.validateFirewallConfiguration(
+        id,
+        merged,
+        running.configuration,
+      );
+      return candidate.stageFirewallConfiguration(
+        id,
+        running.policyId,
+        merged,
+        running.configuration,
+      );
+    },
+  );
+  handle(
+    IPC.stageFirewallPower,
+    async (_e, id: unknown, power: unknown, rawAllocation: unknown) => {
+      assertId(id, RESOURCE_TYPES.firewall, 'firewall');
+      if (power !== 'Running' && power !== 'Stopped')
+        throw new Error('Unsupported firewall power state.');
+      const running = await resourceSettings.getFirewallDraftContext(id, false);
+      const effective = candidate.effectiveFirewallConfiguration(
+        id,
+        running.configuration,
+      );
+      const desired: FirewallConfiguration = {
+        ...effective,
+        powerState: power,
+        allocation:
+          rawAllocation === undefined
+            ? effective.allocation
+            : sanitizeAllocation(rawAllocation),
+      };
+      if (power === 'Running' && !desired.allocation)
+        throw Object.assign(
+          new Error(
+            'Choose the existing network and public IP resources used to start this firewall.',
+          ),
+          { code: 'AllocationRequired' },
+        );
+      await resourceSettings.validateFirewallConfiguration(
+        id,
+        desired,
+        running.configuration,
+      );
+      return candidate.stageFirewallConfiguration(
+        id,
+        running.policyId,
+        desired,
+        running.configuration,
+      );
+    },
+  );
+
   handle(IPC.getCandidateStatus, () => candidate.status());
+  handle(
+    IPC.importRulesCsv,
+    async (_e, policyId: unknown, csv: unknown, rawChoices: unknown) => {
+      assertId(policyId, RESOURCE_TYPES.policy, 'firewall policy');
+      if (
+        typeof csv !== 'string' ||
+        Buffer.byteLength(csv, 'utf8') > MAX_RULE_IMPORT_BYTES
+      )
+        throw new Error('Select a CSV file no larger than 5 MB.');
+      if (
+        !rawChoices ||
+        typeof rawChoices !== 'object' ||
+        Array.isArray(rawChoices)
+      )
+        throw new Error('Invalid rule import choices.');
+      const choices: RuleImportChoices = {};
+      const entries = Object.entries(rawChoices);
+      if (entries.length > csv.split(/\r\n|\r|\n/).length)
+        throw new Error('Invalid number of rule import choices.');
+      for (const [line, value] of entries) {
+        if (!/^[1-9]\d{0,6}$/.test(line) || !value || typeof value !== 'object')
+          throw new Error('Invalid rule import choice.');
+        const item = value as Record<string, unknown>;
+        if (
+          (item.action !== 'import' &&
+            item.action !== 'replace' &&
+            item.action !== 'skip') ||
+          (item.token !== undefined &&
+            (typeof item.token !== 'string' || item.token.length > 50_000_000))
+        )
+          throw new Error('Invalid rule import choice.');
+        choices[line] = { action: item.action, token: item.token };
+      }
+      return importRulesCsv(policyId, csv, choices);
+    },
+  );
   // Refresh button: drop caches so the next reads come straight from Azure.
   handle(IPC.refresh, () => {
     runningCache.clear();
@@ -189,15 +422,13 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
   handle(IPC.revert, (_e, ids: unknown) => {
     if (ids === undefined) return candidate.revert();
     if (!Array.isArray(ids)) throw new Error('Invalid group list.');
-    for (const id of ids)
-      assertId(id, RESOURCE_TYPES.ruleCollectionGroup, 'rule collection group');
+    for (const id of ids) assertCandidateId(id);
     return candidate.revert(ids as string[]);
   });
   handle(IPC.save, () => candidate.save());
   handle(IPC.commit, async (_e, ids: unknown, description: unknown) => {
     if (!Array.isArray(ids)) throw new Error('Invalid group list.');
-    for (const id of ids)
-      assertId(id, RESOURCE_TYPES.ruleCollectionGroup, 'rule collection group');
+    for (const id of ids) assertCandidateId(id);
     if (typeof description !== 'string' || description.length > 1000) {
       throw new Error(
         'Commit description must be text of at most 1000 characters.',
@@ -234,9 +465,36 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
     const snapshot =
       await snapshotStorage.getSnapshotFromCentralStorage(snapshotId);
     if (!snapshot) throw new Error('Snapshot not found in central storage.');
-    const running = await azure.listRuleCollectionGroups(snapshot.policyId);
+    const [running, policy] = await Promise.all([
+      azure.listRuleCollectionGroups(snapshot.policyId),
+      snapshot.threatIntelMode !== undefined || snapshot.settings !== undefined
+        ? azure.getPolicy(snapshot.policyId)
+        : undefined,
+    ]);
+    let runningPolicy: PolicyModeConfig | undefined;
+    if (
+      snapshot.threatIntelMode !== undefined ||
+      snapshot.settings !== undefined
+    ) {
+      if (!policy || !isThreatIntelMode(policy.threatIntelMode))
+        throw new Error(
+          'The current threat-intelligence mode could not be loaded. No snapshot changes were staged.',
+        );
+      if (snapshot.threatIntelMode !== undefined)
+        await azure.validatePolicyMode(policy, snapshot.threatIntelMode);
+      if (snapshot.settings)
+        await resourceSettings.validatePolicyConfiguration(
+          snapshot.policyId,
+          sanitizePolicySettings(snapshot.settings),
+        );
+      runningPolicy = {
+        name: policy.name,
+        threatIntelMode: policy.threatIntelMode,
+        settings: policy.settings,
+      };
+    }
     for (const g of running) runningCache.set(g.id.toLowerCase(), g);
-    return candidate.restoreSnapshot(snapshot, running);
+    return candidate.restoreSnapshot(snapshot, running, runningPolicy);
   });
   handle(IPC.getSnapshotStorageConfig, () =>
     snapshotStorage.getSnapshotStorageConfig(),
@@ -310,6 +568,7 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
       RESOURCE_TYPES.ruleCollectionGroup,
       RESOURCE_TYPES.deployment,
       RESOURCE_TYPES.storageAccount,
+      RESOURCE_TYPES.ipGroup,
     ].some((type) => isResourceIdOfType(id, type));
     if (!valid) throw new Error('Invalid resource ID.');
     await shell.openExternal(portalUrl(id as string));

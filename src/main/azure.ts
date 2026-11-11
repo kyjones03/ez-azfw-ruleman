@@ -3,6 +3,13 @@ import { NetworkManagementClient } from '@azure/arm-network';
 import { getCredential, onSignOut } from './auth';
 import { parseResourceId } from '../shared/resourceId';
 import { explainAzureError } from '../shared/azureErrors';
+import {
+  isThreatIntelMode,
+  policyModeError,
+  type PolicyModeConfig,
+} from '../shared/policyMode';
+import type { ThreatIntelMode } from '../shared/deploy';
+import { readPolicySettings } from '../shared/resourceSettings';
 import type {
   FirewallSummary,
   PolicySummary,
@@ -121,6 +128,7 @@ export async function getPolicy(policyId: string): Promise<PolicySummary> {
     location: p.location,
     tier: p.sku?.tier,
     threatIntelMode: p.threatIntelMode,
+    settings: readPolicySettings(p, p.identity),
     basePolicyId: p.basePolicy?.id,
     provisioningState: p.provisioningState,
     firewallIds: (p.firewalls ?? [])
@@ -131,6 +139,80 @@ export async function getPolicy(policyId: string): Promise<PolicySummary> {
       .filter((id): id is string => !!id),
     tags: toTags(p.tags),
   };
+}
+
+export async function getPolicyMode(
+  policyId: string,
+): Promise<PolicyModeConfig & { provisioningState?: string }> {
+  const policy = await getPolicy(policyId);
+  if (!isThreatIntelMode(policy.threatIntelMode))
+    throw new Error(
+      `Azure did not return a supported threat-intelligence mode for "${policy.name}".`,
+    );
+  return {
+    name: policy.name,
+    threatIntelMode: policy.threatIntelMode,
+    provisioningState: policy.provisioningState,
+    settings: policy.settings,
+  };
+}
+
+export async function validatePolicyMode(
+  policy: PolicySummary,
+  mode: ThreatIntelMode,
+): Promise<void> {
+  let parentMode: ThreatIntelMode | undefined;
+  if (policy.basePolicyId)
+    parentMode = (await getPolicyMode(policy.basePolicyId)).threatIntelMode;
+  const error = policyModeError(mode, policy.tier, parentMode);
+  if (error) throw new Error(error);
+}
+
+/** Re-read the full resource so unrelated settings survive a policy update. */
+export async function putPolicyMode(
+  policyId: string,
+  baseline: ThreatIntelMode,
+  mode: ThreatIntelMode,
+): Promise<void> {
+  const { subscriptionId, resourceGroup, name } = parseResourceId(policyId);
+  const client = network(subscriptionId).firewallPolicies;
+  const current = await client.get(resourceGroup, name);
+  if (!isThreatIntelMode(current.threatIntelMode))
+    throw new Error(
+      'Azure did not return a supported threat-intelligence mode.',
+    );
+  if (current.threatIntelMode !== baseline && current.threatIntelMode !== mode)
+    throw Object.assign(
+      new Error(
+        'Threat intelligence changed in Azure after this draft started. Discard the policy-settings draft, refresh, and make the change again.',
+      ),
+      { code: 'PolicyModeConflict' },
+    );
+  if (current.threatIntelMode === mode) return;
+  await validatePolicyMode(
+    {
+      id: policyId,
+      name,
+      subscriptionId,
+      resourceGroup,
+      tier: current.sku?.tier,
+      basePolicyId: current.basePolicy?.id,
+      firewallIds: [],
+      childPolicyIds: [],
+    },
+    mode,
+  );
+  await client.createOrUpdate(
+    resourceGroup,
+    name,
+    {
+      ...current,
+      threatIntelMode: mode,
+    },
+    current.etag
+      ? { requestOptions: { headers: { 'If-Match': current.etag } } }
+      : {},
+  );
 }
 
 function toGroup(raw: unknown): RuleCollectionGroup {

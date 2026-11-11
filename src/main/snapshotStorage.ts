@@ -5,6 +5,8 @@ import { describeAzureError, graphQuery } from './azure';
 import { loadState, updateState } from './store';
 import { parseResourceId } from '../shared/resourceId';
 import { APP_TAG } from '../shared/deploy';
+import { isThreatIntelMode } from '../shared/policyMode';
+import { armRequest } from './arm';
 import type {
   CommitHistoryEntry,
   CommitRecord,
@@ -18,6 +20,7 @@ import type {
 export const DEFAULT_SNAPSHOT_CONTAINER = 'ez-azfw-snapshots';
 /** Commit history lives beside the snapshots, in the same account, so one setup and one role cover both. */
 export const DEFAULT_HISTORY_CONTAINER = 'ez-azfw-history';
+// Keep discovery keys stable across app renames so existing shared storage is still found.
 export const SNAPSHOT_TAG_NAME = 'ez-azfw-ruleman-snapshots';
 export const SNAPSHOT_CONTAINER_TAG = 'ez-azfw-ruleman-container';
 export const HISTORY_CONTAINER_TAG = 'ez-azfw-ruleman-history-container';
@@ -100,53 +103,6 @@ export function validateContainerChoice(
   const historyErr = validateContainerName(historyContainer);
   if (historyErr) return `Commit history container: ${historyErr}`;
   return undefined;
-}
-
-async function armToken(): Promise<string> {
-  const t = await getCredential().getToken(
-    'https://management.azure.com/.default',
-  );
-  if (!t?.token) throw new Error('Azure did not return an access token.');
-  return t.token;
-}
-
-async function armRequest<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<{ status: number; headers: Headers; data: T }> {
-  const token = await armToken();
-  const url = path.startsWith('https://')
-    ? path
-    : `https://management.azure.com${path}`;
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...(init.headers as Record<string, string> | undefined),
-    },
-    signal: AbortSignal.timeout(ARM_TIMEOUT_MS),
-  });
-  const text = await res.text();
-  let parsed: unknown;
-  try {
-    parsed = text ? JSON.parse(text) : {};
-  } catch {
-    parsed = { message: text };
-  }
-  if (!res.ok) {
-    const errObj =
-      (parsed as { error?: { code?: string; message?: string } })?.error ??
-      (parsed as { code?: string; message?: string });
-    throw Object.assign(
-      new Error(errObj?.message || `Azure Storage error (HTTP ${res.status}).`),
-      {
-        statusCode: res.status,
-        code: errObj?.code,
-      },
-    );
-  }
-  return { status: res.status, headers: res.headers, data: parsed as T };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -716,6 +672,7 @@ function isSnapshot(value: unknown): value is PolicySnapshot {
     typeof s.policyId === 'string' &&
     typeof s.policyName === 'string' &&
     typeof s.time === 'string' &&
+    (s.threatIntelMode === undefined || isThreatIntelMode(s.threatIntelMode)) &&
     Array.isArray(s.groups) &&
     s.groups.every(
       (g) =>

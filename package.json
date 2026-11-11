@@ -1,9 +1,9 @@
 {
-  "name": "ez-azfw-ruleman",
-  "productName": "EZ AzFW Rule Manager",
-  "version": "1.4.0",
+  "name": "ez-azfw-manager",
+  "productName": "EZ AzFW Manager",
+  "version": "1.5.0",
   "private": true,
-  "description": "Desktop app for managing Azure Firewall policy rules with a draft, review and commit workflow",
+  "description": "Desktop app for managing Azure Firewalls, policies, rules and IP groups with a draft, review and commit workflow",
   "keywords": [
     "azure",
     "azure-firewall",
@@ -16,13 +16,13 @@
   ],
   "license": "MIT",
   "author": "samsmith-MSFT",
-  "homepage": "https://github.com/samsmith-MSFT/ez-azfw-ruleman#readme",
+  "homepage": "https://github.com/samsmith-MSFT/ez-azfw-manager#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/samsmith-MSFT/ez-azfw-ruleman.git"
+    "url": "git+https://github.com/samsmith-MSFT/ez-azfw-manager.git"
   },
   "bugs": {
-    "url": "https://github.com/samsmith-MSFT/ez-azfw-ruleman/issues"
+    "url": "https://github.com/samsmith-MSFT/ez-azfw-manager/issues"
   },
   "engines": {
     "node": ">=22"

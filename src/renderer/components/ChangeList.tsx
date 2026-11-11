@@ -1,6 +1,16 @@
 import type { ChangeItem } from '../../shared/types';
 
 const VERB = {
+  firewall: {
+    added: 'Added firewall settings',
+    modified: 'Changed firewall settings',
+    removed: 'Removed firewall settings',
+  },
+  policy: {
+    added: 'Added policy settings',
+    modified: 'Changed policy settings',
+    removed: 'Removed policy settings',
+  },
   group: {
     added: 'Created group',
     modified: 'Changed group',
@@ -58,7 +68,9 @@ export function ChangeList({ changes }: { changes: ChangeItem[] }) {
     <ul className="space-y-0.5">
       {changes.map((c, i) => {
         const what =
-          c.target === 'group'
+          c.target === 'group' ||
+          c.target === 'policy' ||
+          c.target === 'firewall'
             ? ''
             : c.target === 'collection'
               ? c.collection

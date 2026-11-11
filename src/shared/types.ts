@@ -1,4 +1,9 @@
 // Plain, IPC-serializable types shared by the main process, preload and renderer.
+import type { ThreatIntelMode } from './deploy';
+import type {
+  FirewallConfiguration,
+  PolicyAdvancedSettings,
+} from './resourceSettings';
 
 /** 'window': app sign-in window; 'browser': system browser; 'cli': Azure CLI. */
 export type AuthMethod = 'window' | 'browser' | 'cli';
@@ -63,6 +68,7 @@ export interface PolicySummary {
   location?: string;
   tier?: string;
   threatIntelMode?: string;
+  settings?: PolicyAdvancedSettings;
   basePolicyId?: string;
   provisioningState?: string;
   firewallIds: string[];
@@ -168,13 +174,20 @@ export type ChangeKind = 'added' | 'modified' | 'removed';
 
 export interface ChangeItem {
   kind: ChangeKind;
-  target: 'group' | 'collection' | 'rule';
+  target: 'group' | 'collection' | 'rule' | 'policy' | 'firewall';
   collection?: string;
   rule?: string;
   detail?: string;
 }
 
 export interface PendingGroupChange {
+  /** Omitted for legacy rule-collection-group drafts. Policy changes use the policy ID as groupId. */
+  target?: 'policy' | 'firewall';
+  firewallConfiguration?: {
+    before: FirewallConfiguration;
+    after: FirewallConfiguration;
+  };
+  policyMode?: { before: ThreatIntelMode; after: ThreatIntelMode };
   groupId: string;
   groupName: string;
   policyId: string;
@@ -194,6 +207,7 @@ export interface CandidateStatus {
 }
 
 export interface CommitResult {
+  target?: 'policy' | 'firewall';
   groupId: string;
   groupName: string;
   policyName: string;
@@ -232,6 +246,9 @@ export interface PolicySnapshot {
   user?: string;
   description: string;
   groups: RuleCollectionGroup[];
+  /** Omitted by older snapshots, which restore rules only. */
+  threatIntelMode?: ThreatIntelMode;
+  settings?: PolicyAdvancedSettings;
 }
 
 export interface SnapshotStorageConfig {
@@ -310,6 +327,7 @@ export interface CommitProgress {
   groupName: string;
   policyName: string;
   groups: {
+    target?: 'policy' | 'firewall';
     groupId: string;
     groupName: string;
     policyName: string;
@@ -330,6 +348,9 @@ export interface IpGroupInfo {
   location: string;
   /** Member addresses, CIDRs and ranges. */
   addresses: string[];
+  subscriptionName?: string;
+  provisioningState?: string;
+  tags?: Record<string, string>;
 }
 
 /** Values the rule editor can pick from instead of typing, loaded from Azure. */

@@ -94,7 +94,7 @@ export function FirewallPicker({
               ? 'Searching every subscription you can access.'
               : error && !firewalls.length
                 ? "The search didn't finish."
-                : `${firewalls.length} ${firewalls.length === 1 ? 'firewall' : 'firewalls'} found in the subscriptions you can access. Ticked firewalls appear in EZ AzFW Rule Manager; unticking one only hides it here. Nothing in Azure is changed or deleted.`}
+                : `${firewalls.length} ${firewalls.length === 1 ? 'firewall' : 'firewalls'} found in the subscriptions you can access. Ticked firewalls appear in EZ AzFW Manager; unticking one only hides it here. Nothing in Azure is changed or deleted.`}
           </p>
         </div>
         {tenants.length > 1 && (
@@ -280,7 +280,7 @@ export function FirewallPicker({
                       ) : (
                         <span
                           className="text-fg-faint"
-                          title="Classic rules are read-only in EZ AzFW Rule Manager."
+                          title="Classic rules are read-only in EZ AzFW Manager."
                         >
                           Classic rules (read-only)
                         </span>

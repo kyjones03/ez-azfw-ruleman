@@ -35,8 +35,8 @@ export function SignIn({
           Sign in to Azure
         </h1>
         <p className="mt-2 text-base text-fg-muted">
-          EZ AzFW Rule Manager reads your Azure Firewalls and their policies.
-          Rule changes stay in a local draft until you commit them.
+          EZ AzFW Manager reads your Azure Firewalls and their policies. Rule
+          changes stay in a local draft until you commit them.
         </p>
 
         {busy ? (

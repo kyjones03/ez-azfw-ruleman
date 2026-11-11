@@ -109,8 +109,8 @@ export function DeployStatus({
         <div className="mb-4 flex gap-2 border border-candidate/40 bg-candidate/10 p-3 text-xs text-candidate">
           <AlertTriangle size={16} className="shrink-0" />
           <p>
-            EZ AzFW Rule Manager was closed while this deployment was running,
-            so this is its last known state. Azure kept running it — check the
+            EZ AzFW Manager was closed while this deployment was running, so
+            this is its last known state. Azure kept running it — check the
             final result in the Azure portal.
           </p>
         </div>

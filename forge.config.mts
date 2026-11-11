@@ -29,7 +29,8 @@ const windowsSign = winCertFile
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    executableName: 'ez-azfw-ruleman',
+    executableName: 'ez-azfw-manager',
+    // Keep the original application ID so existing installations remain compatible.
     appBundleId: 'com.samsmithmsft.ezazfwruleman',
     appCategoryType: 'public.app-category.developer-tools',
     appCopyright: 'Copyright (c) 2026 samsmith-MSFT',
@@ -39,10 +40,10 @@ const config: ForgeConfig = {
     extraResource: ['./assets/icons/icon.ico', './assets/icons/icon.png'],
     win32metadata: {
       CompanyName: 'samsmith-MSFT',
-      FileDescription: 'EZ AzFW Rule Manager',
-      ProductName: 'EZ AzFW Rule Manager',
-      InternalName: 'ez-azfw-ruleman',
-      OriginalFilename: 'ez-azfw-ruleman.exe',
+      FileDescription: 'EZ AzFW Manager',
+      ProductName: 'EZ AzFW Manager',
+      InternalName: 'ez-azfw-manager',
+      OriginalFilename: 'ez-azfw-manager.exe',
     },
     ...(macIdentity ? { osxSign: { identity: macIdentity } } : {}),
     ...(notarize

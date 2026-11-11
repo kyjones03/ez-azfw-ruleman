@@ -50,7 +50,7 @@ const GENERIC_AUTHORITIES = ['organizations', 'common'];
 const SIGN_IN_PARTITION = 'persist:signin';
 
 const PAGE = (title: string, body: string) =>
-  `<!doctype html><meta charset="utf-8"><title>EZ AzFW Rule Manager</title><body style="font-family:Segoe UI,system-ui,sans-serif;background:#0F1B2D;color:#E4EAF3;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div><h1 style="font-size:22px;margin:0 0 8px">${title}</h1><p style="color:#93A4BD;margin:0">${body}</p></div></body>`;
+  `<!doctype html><meta charset="utf-8"><title>EZ AzFW Manager</title><body style="font-family:Segoe UI,system-ui,sans-serif;background:#0F1B2D;color:#E4EAF3;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div><h1 style="font-size:22px;margin:0 0 8px">${title}</h1><p style="color:#93A4BD;margin:0">${body}</p></div></body>`;
 
 /*
  * How sign-in works (verified against personal and work accounts):
@@ -245,12 +245,12 @@ async function interactive(
           else await shell.openExternal(url);
         },
         successTemplate: PAGE(
-          'Signed in to EZ AzFW Rule Manager',
+          'Signed in to EZ AzFW Manager',
           'You can close this tab and return to the app.',
         ),
         errorTemplate: PAGE(
           "Sign-in didn't complete",
-          'Return to EZ AzFW Rule Manager and try again.',
+          'Return to EZ AzFW Manager and try again.',
         ),
       }),
       cancel,

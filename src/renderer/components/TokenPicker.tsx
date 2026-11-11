@@ -35,6 +35,7 @@ export function TokenPicker({
   placeholder,
   loading,
   allowCustom,
+  disabled = false,
   invalid,
   emptyText = 'No matches',
 }: {
@@ -45,12 +46,16 @@ export function TokenPicker({
   placeholder?: string;
   loading?: boolean;
   allowCustom?: boolean;
+  disabled?: boolean;
   invalid?: boolean;
   emptyText?: string;
 }) {
   const tokens = parseList(value);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
   const [active, setActive] = useState(0);
   const [position, setPosition] = useState<CSSProperties>();
   const box = useRef<HTMLDivElement>(null);
@@ -178,15 +183,21 @@ export function TokenPicker({
       <div
         ref={box}
         role="combobox"
-        tabIndex={0}
+        tabIndex={disabled ? -1 : 0}
         aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-invalid={invalid}
+        aria-disabled={disabled}
         title={summary}
-        className={`input relative flex min-h-8 cursor-pointer flex-wrap items-center gap-1 py-[3px] pl-1 pr-6 ${invalid ? 'border-deny' : ''}`}
-        onClick={() => (open ? close() : setOpen(true))}
+        className={`input relative flex min-h-8 flex-wrap items-center gap-1 py-[3px] pl-1 pr-6 ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${invalid ? 'border-deny' : ''}`}
+        onClick={() => {
+          if (disabled) return;
+          if (open) close();
+          else setOpen(true);
+        }}
         onKeyDown={(e) => {
+          if (disabled) return;
           if (
             !open &&
             (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown')
@@ -209,6 +220,7 @@ export function TokenPicker({
               <span className="truncate">{label(t)}</span>
               <button
                 type="button"
+                disabled={disabled}
                 className="text-fg-faint hover:text-fg"
                 aria-label={`Remove ${label(t)}`}
                 onClick={(e) => {

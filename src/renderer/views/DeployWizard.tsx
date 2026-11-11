@@ -852,7 +852,7 @@ export function DeployWizard({
           </button>
         </div>
         <p className="mt-0.5 text-xs text-fg-faint">
-          A createdBy=EZ AzFW Rule Manager tag is added automatically.
+          A createdBy=EZ AzFW Manager tag is added automatically.
         </p>
       </div>
     </div>
@@ -1218,7 +1218,7 @@ export function DeployWizard({
           checked={addToManaged}
           onChange={(e) => setAddToManaged(e.target.checked)}
         />
-        Manage this firewall in EZ AzFW Rule Manager after it's deployed
+        Manage this firewall in EZ AzFW Manager after it's deployed
       </label>
     </div>
   ) : (
@@ -1262,7 +1262,7 @@ export function DeployWizard({
         <dt className="text-fg-faint">Tags</dt>
         <dd className="truncate">
           {[
-            'createdBy=EZ AzFW Rule Manager',
+            'createdBy=EZ AzFW Manager',
             ...tags
               .filter((t) => t.key.trim())
               .map((t) => `${t.key}=${t.value}`),

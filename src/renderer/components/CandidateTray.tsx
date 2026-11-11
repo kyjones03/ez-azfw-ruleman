@@ -25,10 +25,24 @@ export function CandidateTray({
   const committing = status.pending.length - waiting.length;
   const changes = waiting.reduce((n, p) => n + p.changes.length, 0);
   const groups = waiting.length;
+  const policies = waiting.filter((p) => p.target === 'policy').length;
+  const firewalls = waiting.filter((p) => p.target === 'firewall').length;
+  const groupCount = groups - policies - firewalls;
+  const scope = [
+    groupCount
+      ? `${groupCount} rule collection ${groupCount === 1 ? 'group' : 'groups'}`
+      : '',
+    policies ? `${policies} ${policies === 1 ? 'policy' : 'policies'}` : '',
+    firewalls
+      ? `${firewalls} ${firewalls === 1 ? 'firewall' : 'firewalls'}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' and ');
   if (!status.pending.length && !status.unsaved) return null;
 
   const summary = groups
-    ? `${changes} ${changes === 1 ? 'change' : 'changes'} not committed in ${groups} rule collection ${groups === 1 ? 'group' : 'groups'}`
+    ? `${changes} ${changes === 1 ? 'change' : 'changes'} not committed in ${scope}`
     : committing
       ? ''
       : 'Your edits cancel out; nothing differs from Azure';
@@ -78,8 +92,15 @@ export function CandidateTray({
             className={`inline-flex items-center gap-1.5 text-azure hover:underline ${summary ? 'ml-3' : ''}`}
           >
             <Loader2 size={13} className="animate-spin" />
-            Committing {committing} {committing === 1 ? 'group' : 'groups'} to
-            Azure — progress is in the activity bell
+            Committing {committing}{' '}
+            {status.pending.some((p) => !!p.target && p.committing)
+              ? committing === 1
+                ? 'resource'
+                : 'resources'
+              : committing === 1
+                ? 'group'
+                : 'groups'}{' '}
+            to Azure — progress is in the activity bell
           </button>
         )}
       </p>

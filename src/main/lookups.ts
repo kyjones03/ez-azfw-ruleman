@@ -1,7 +1,8 @@
 // Reference data for the rule editor's pickers: IP Groups, service tags, FQDN tags and web
 // categories. Each lookup fails independently so one missing permission doesn't hide the rest.
 import { onSignOut } from './auth';
-import { graphQuery, network, describeAzureError } from './azure';
+import { network, describeAzureError } from './azure';
+import { discoverIpGroups } from './ipGroups';
 import type { IpGroupInfo, RuleLookups } from '../shared/types';
 
 const CACHE_MS = 15 * 60_000;
@@ -32,16 +33,7 @@ async function load(
     attempt(
       "IP Groups couldn't be listed",
       errors,
-      async () =>
-        (
-          await graphQuery<IpGroupInfo & { addresses?: string[] }>(
-            `resources
-             | where type =~ 'microsoft.network/ipgroups'
-             | project id, name, resourceGroup, subscriptionId, location,
-                       addresses = properties.ipAddresses
-             | order by name asc`,
-          )
-        ).map((g) => ({ ...g, addresses: g.addresses ?? [] })),
+      discoverIpGroups,
       [] as IpGroupInfo[],
     ),
     attempt(

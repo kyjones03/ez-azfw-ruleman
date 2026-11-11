@@ -39,6 +39,28 @@ describe('state file', () => {
     expect(reloaded.loadState().managedFirewallIds).toEqual(['fw1']);
   });
 
+  it('keeps policy-setting drafts alongside legacy rule drafts', async () => {
+    const store = await freshStore();
+    store.updateState((s) => {
+      s.policyCandidate = [
+        {
+          kind: 'policy',
+          groupId: 'policy-id',
+          policyId: 'policy-id',
+          policyName: 'fp',
+          stagedAt: '2026-01-01',
+          baseline: { name: 'fp', threatIntelMode: 'Alert' },
+          candidate: { name: 'fp', threatIntelMode: 'Deny' },
+        },
+      ];
+    });
+    const reloaded = await freshStore();
+    expect(
+      reloaded.loadState().policyCandidate?.[0].candidate.threatIntelMode,
+    ).toBe('Deny');
+    expect(reloaded.loadState().candidate).toEqual([]);
+  });
+
   it('keeps a damaged file aside instead of overwriting it', async () => {
     fs.writeFileSync(stateFile, '{"history": [', 'utf8');
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});

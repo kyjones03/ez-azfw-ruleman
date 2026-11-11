@@ -227,7 +227,15 @@ export function CommitHistory({
                                 )}
                                 <span className="min-w-0">
                                   <span className="font-medium text-fg">
-                                    {x.policyName} / {x.groupName}
+                                    {x.target === 'firewall'
+                                      ? x.groupName
+                                      : x.policyName}{' '}
+                                    /{' '}
+                                    {x.target === 'policy'
+                                      ? 'Policy settings'
+                                      : x.target === 'firewall'
+                                        ? 'Firewall settings'
+                                        : x.groupName}
                                   </span>{' '}
                                   <span className="text-xs text-fg-muted">
                                     {x.ok

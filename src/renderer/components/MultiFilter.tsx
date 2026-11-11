@@ -113,7 +113,7 @@ export function MultiFilter({
           setQuery('');
           setOpen((o) => !o);
         }}
-        className={`flex h-8 max-w-[15rem] items-center gap-1.5 rounded-full border px-3 text-sm ${
+        className={`flex h-8 max-w-[15rem] items-center gap-1.5 rounded border px-3 text-sm ${
           selected.length
             ? 'border-azure/60 bg-azure/15 text-fg'
             : 'border-line text-fg-muted hover:border-fg-faint hover:text-fg'

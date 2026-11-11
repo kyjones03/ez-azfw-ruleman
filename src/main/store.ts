@@ -1,6 +1,11 @@
 import { app } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { PolicyModeConfig } from '../shared/policyMode';
+import type {
+  FirewallAllocation,
+  FirewallConfiguration,
+} from '../shared/resourceSettings';
 import type {
   AuthMethod,
   CommitProgress,
@@ -12,6 +17,7 @@ import type {
 } from '../shared/types';
 
 export interface StagedGroup {
+  kind?: 'group';
   groupId: string;
   policyId: string;
   policyName: string;
@@ -23,10 +29,35 @@ export interface StagedGroup {
   candidate: RuleCollectionGroup;
 }
 
+export interface StagedPolicyMode {
+  kind: 'policy';
+  /** The policy resource ID; shares the existing commit-selection ID contract. */
+  groupId: string;
+  policyId: string;
+  policyName: string;
+  stagedAt: string;
+  baseline: PolicyModeConfig;
+  candidate: PolicyModeConfig;
+}
+
+export interface StagedFirewall {
+  kind: 'firewall';
+  groupId: string;
+  /** Associated policy when present; empty for classic-rule firewalls. */
+  policyId: string;
+  policyName: string;
+  stagedAt: string;
+  baseline: FirewallConfiguration;
+  candidate: FirewallConfiguration;
+}
+
 export interface PersistedState {
   version: 1;
   managedFirewallIds: string[];
   candidate: StagedGroup[];
+  policyCandidate?: StagedPolicyMode[];
+  firewallCandidate?: StagedFirewall[];
+  firewallAllocations?: Record<string, FirewallAllocation>;
   history: CommitRecord[];
   /** Centralized Azure Blob Storage configuration for shared policy snapshots. */
   snapshotStorage?: SnapshotStorageConfig;
@@ -45,6 +76,9 @@ export interface ActiveCommit {
   results: CommitResult[];
   /** What was sent to Azure per group (lower-cased ID), to check the outcome after a restart. */
   written: Record<string, RuleCollectionGroup>;
+  writtenPolicies?: Record<string, PolicyModeConfig>;
+  writtenFirewalls?: Record<string, FirewallConfiguration>;
+  scopes?: Record<string, string>;
 }
 
 export interface SavedSession {
@@ -111,6 +145,8 @@ function parse(text: string): PersistedState {
     ...rest,
     managedFirewallIds: arrayOr(parsed.managedFirewallIds),
     candidate: arrayOr(parsed.candidate),
+    policyCandidate: arrayOr(parsed.policyCandidate),
+    firewallCandidate: arrayOr(parsed.firewallCandidate),
     history: arrayOr(parsed.history),
     activeCommits: Array.isArray(parsed.activeCommits)
       ? parsed.activeCommits
@@ -166,15 +202,16 @@ export function loadState(): PersistedState {
   return cache;
 }
 
-export function updateState(mutate: (state: PersistedState) => void): void {
+export function updateState(mutate: (state: PersistedState) => void): boolean {
   const state = loadState();
   mutate(state);
   state.history = state.history.slice(0, MAX_HISTORY);
-  if (persistBlocked) return;
+  if (persistBlocked) return false;
   const target = filePath();
   fs.mkdirSync(path.dirname(target), { recursive: true });
   // Write-then-rename so a crash never leaves a truncated state file.
   const tmp = `${target}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf8');
   fs.renameSync(tmp, target);
+  return true;
 }

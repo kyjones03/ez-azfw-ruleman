@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-11
+
+### Added
+
+- **IP group management.** A new IP groups page lists groups across accessible subscriptions with name, subscription, resource group, location and tag filters. View member addresses and create groups with validated names, IPv4 addresses, CIDRs and ranges. Creation writes directly to Azure and is separate from rule drafts.
+- **Bulk CSV rule import.** Download a template with network, application, DNAT and IP group examples, then preview and stage rules across collection groups and collections in the selected policy. Validation reports CSV line numbers and requires full Azure resource IDs for IP groups.
+- **Import conflict review.** Review same-name rules, duplicates and potential traffic overlaps before staging. Choose Skip, Replace existing rule or Import anyway where applicable; reviewed conflicts are rechecked before the whole import is staged.
+- **Policy threat intelligence.** Managed policy rows now offer Off / Alert / Deny buttons using the existing save, review and commit workflow. Inherited-only parents remain read-only, with Basic-tier and parent-policy restrictions validated.
+- **Advanced firewall settings.** View learned SNAT prefixes, associate an existing Route Server, configure supported scaling limits, and assign or remove existing maintenance configurations.
+- **Advanced policy settings.** Configure DNS proxy/custom DNS, validated threat-intelligence IP and FQDN allowlists, SNAT auto-learning, and Premium TLS inspection using existing Key Vault certificate secret references and user-assigned managed identities.
+- **Firewall start and stop.** Stage power changes from the State column, review disruption warnings, then commit. Original network allocation references are saved before stopping and reused when starting; existing resources can be selected when a saved allocation is unavailable.
+
+### Changed
+
+- Renamed the app to **EZ AzFW Manager** and the repository to **ez-azfw-manager**. Release downloads and executable names now use `ez-azfw-manager`; existing saved-data paths, preferences, shared-storage discovery tags and installer identity are retained for compatibility.
+- Firewall and policy state controls use grouped buttons instead of sliders. Firewall buttons show Stop / Running or Stopped / Start based on live Azure state, while pending choices remain amber.
+- Shared filter controls have squared-off corners, and IP group creation uses the same searchable dropdown style as firewall deployment.
+- Commit review, progress, shared history and interrupted-operation verification now support firewall and policy settings alongside rule changes. Policy snapshots can capture and restore advanced settings.
+- Firewall private-IP display uses fresh ARM configuration rather than potentially delayed discovery data after allocation changes.
+
+### Fixed
+
+- Firewall writes no longer send the firewall ETag as `If-Match`, which Azure's allocator can compare with the linked subnet ETag and fail with `PreconditionFailedEtagMismatch`. Fresh-state field conflict checks remain; avoid concurrent external firewall edits while committing.
+- Azure operation failures retain error codes and nested details. Accepted requests are not reported as completed, and terminally failed operations are not automatically resubmitted.
+- Policy mode and advanced setting edits preserve each other and use a single policy update when committed together. Firewall power edits preserve unrelated pending settings and maintenance assignments.
+- Persistence failures now block commits and deallocation instead of reporting success or losing restart references. Maintenance assignment changes are rechecked after long-running firewall updates.
+
+### Important
+
+- Start/stop interrupts traffic; restart can change the private IP or fail because of regional capacity. Retained public IPs and other resources can continue to incur charges while the firewall is stopped.
+- TLS inspection and maintenance editing reference existing resources only; the app does not create certificates, identities or maintenance schedules, or grant their permissions. Commit a VNet Route Server association before enabling policy SNAT auto-learning.
+
 ## [1.4.0] - 2026-11-03
 
 ### Added
@@ -78,10 +110,11 @@ Initial public release.
 - Encrypted, OS key store–backed token cache.
 - Portable, no-install executables for Windows (x64 and Arm64 `.exe`), macOS (zipped `.app`, arm64 and x64), and Linux (x64 AppImage).
 
-[Unreleased]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.4.0...HEAD
-[1.4.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.3.0...v1.4.0
-[1.3.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.2.0...v1.3.0
-[1.2.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.1.1...v1.2.0
-[1.1.1]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/samsmith-MSFT/ez-azfw-ruleman/releases/tag/v1.0.0
+[Unreleased]: https://github.com/samsmith-MSFT/ez-azfw-manager/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/samsmith-MSFT/ez-azfw-manager/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/samsmith-MSFT/ez-azfw-manager/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/samsmith-MSFT/ez-azfw-manager/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/samsmith-MSFT/ez-azfw-manager/compare/v1.1.1...v1.2.0
+[1.1.1]: https://github.com/samsmith-MSFT/ez-azfw-manager/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/samsmith-MSFT/ez-azfw-manager/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/samsmith-MSFT/ez-azfw-manager/releases/tag/v1.0.0
