@@ -4,6 +4,7 @@ import {
   ChevronUp,
   History,
   ListTree,
+  ScrollText,
   LogOut,
   Network,
   Route,
@@ -21,6 +22,7 @@ export type Tab =
   | 'ipGroups'
   | 'flow'
   | 'snapshots'
+  | 'logs'
   | 'history';
 
 function NavItem({
@@ -116,6 +118,13 @@ export function Blade({
         label="Flow tester"
         active={tab === 'flow'}
         onClick={() => onTab('flow')}
+      />
+      <NavItem
+        open={open}
+        icon={<ScrollText size={18} />}
+        label="Firewall logs"
+        active={tab === 'logs'}
+        onClick={() => onTab('logs')}
       />
       <NavItem
         open={open}

@@ -12,6 +12,8 @@ import { Firewalls } from './views/Firewalls';
 import { Policies } from './views/Policies';
 import { IpGroups } from './views/IpGroups';
 import { FlowTesterPage } from './views/FlowTesterPage';
+import { FirewallLogs } from './views/FirewallLogs';
+import { LogStreamProvider } from './logStream';
 import type { FlowHit } from '../shared/flow';
 import { PolicyEditor, type PolicyOption } from './views/PolicyEditor';
 import { CommitDialog } from './views/CommitDialog';
@@ -529,7 +531,7 @@ export default function App() {
     setTab('rules');
   };
 
-  return (
+  const workspace = (
     <div className="flex h-full flex-col">
       <TitleBar
         bladeOpen={bladeOpen}
@@ -550,7 +552,9 @@ export default function App() {
           onSwitchTenant={switchTenant}
         />
         <main className="flex min-w-0 flex-1 flex-col">
-          {tab === 'ipGroups' ? (
+          {tab === 'logs' ? (
+            <FirewallLogs />
+          ) : tab === 'ipGroups' ? (
             <IpGroups
               key={account.tenantId}
               reloadKey={reloadKey}
@@ -707,5 +711,10 @@ export default function App() {
       )}
       {deployOverlays}
     </div>
+  );
+
+  // Keyed by directory: the log stream and its rows start clean when the directory changes.
+  return (
+    <LogStreamProvider key={account.tenantId}>{workspace}</LogStreamProvider>
   );
 }

@@ -40,6 +40,10 @@ import { candidate } from './candidate';
 import { clearLookupCache, getRuleLookups } from './lookups';
 import { loadState, updateState } from './store';
 import { isAppUrl } from './appProtocol';
+import { LogStreamSession } from './eventHub';
+import { createHubClient } from './eventHubClient';
+import { validateLogStreamConfig } from '../shared/logStream';
+import * as logSources from './logSources';
 import { isThreatIntelMode, type PolicyModeConfig } from '../shared/policyMode';
 import * as resourceSettings from './resourceSettings';
 import {
@@ -131,6 +135,66 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
     const contents = getContents();
     if (contents && !contents.isDestroyed()) contents.send(channel, payload);
   };
+  // Live firewall logs (Event Hubs). One stream at a time; it dies with the sign-in.
+  const logSession = new LogStreamSession({
+    createClient: (config) =>
+      createHubClient(config, auth.getEventHubsCredential()),
+    emitBatch: (batch) => send(IPC.logBatch, batch),
+    emitStatus: (status) => send(IPC.logStatus, status),
+    sleep: (ms, signal) =>
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, ms);
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          { once: true },
+        );
+      }),
+  });
+  auth.onSignOut(() => void logSession.stop());
+  handle(IPC.logsGetConfig, () => {
+    const saved = loadState().logStream;
+    if (!saved || saved.tenantId !== auth.getAccount()?.tenantId) return null;
+    try {
+      return validateLogStreamConfig(saved.config);
+    } catch {
+      return null;
+    }
+  });
+  handle(IPC.logsGetStatus, () => logSession.status);
+  handle(IPC.logsStart, async (_e, raw: unknown) => {
+    const config = validateLogStreamConfig(raw);
+    const tenantId = auth.getAccount()?.tenantId;
+    if (!tenantId) throw new Error('Choose a directory to continue.');
+    updateState((s) => {
+      s.logStream = { tenantId, config };
+    });
+    await logSession.start(config);
+    return logSession.status;
+  });
+  handle(IPC.logsStop, () => logSession.stop());
+  handle(IPC.logsDiscover, () => logSources.discoverLogSources());
+  handle(IPC.logsListHubs, (_e, namespaceId: unknown) => {
+    assertId(namespaceId, RESOURCE_TYPES.eventHubNamespace, 'namespace');
+    return logSources.listEventHubs(namespaceId);
+  });
+  handle(
+    IPC.logsListConsumerGroups,
+    (_e, namespaceId: unknown, eventHub: unknown) => {
+      assertId(namespaceId, RESOURCE_TYPES.eventHubNamespace, 'namespace');
+      const hub = str(eventHub, 'event hub name');
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$/.test(hub))
+        throw new Error('Invalid event hub name.');
+      return logSources.listConsumerGroups(namespaceId, hub);
+    },
+  );
+  handle(IPC.logsGrantReceiver, (_e, raw: unknown) =>
+    logSources.grantReceiver(validateLogStreamConfig(raw)),
+  );
+
   handle(IPC.signIn, (_e, method: unknown, tenantId: unknown) => {
     if (method !== 'window' && method !== 'browser' && method !== 'cli')
       throw new Error('Unknown sign-in method.');

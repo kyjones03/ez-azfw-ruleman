@@ -2,6 +2,7 @@ import { app } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { PolicyModeConfig } from '../shared/policyMode';
+import type { LogStreamConfig } from '../shared/logStream';
 import type {
   FirewallAllocation,
   FirewallConfiguration,
@@ -61,6 +62,8 @@ export interface PersistedState {
   history: CommitRecord[];
   /** Centralized Azure Blob Storage configuration for shared policy snapshots. */
   snapshotStorage?: SnapshotStorageConfig;
+  /** Event Hub the Logs view reads from; only meaningful in the directory it was saved for. */
+  logStream?: { tenantId: string; config: LogStreamConfig };
   /** Last browser sign-in, so the next one can go straight to that directory. */
   lastSignIn?: LastSignIn;
   /** Which sign-in to restore silently at startup (no secrets; tokens live in tokenCache). */

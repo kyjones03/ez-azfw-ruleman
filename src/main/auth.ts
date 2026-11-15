@@ -25,6 +25,7 @@ import type {
 
 const ARM_SCOPES = ['https://management.azure.com/.default'];
 const STORAGE_SCOPES = ['https://storage.azure.com/.default'];
+const EVENT_HUBS_SCOPES = ['https://eventhubs.azure.net/.default'];
 const ARM = 'https://management.azure.com';
 const LOGIN = 'https://login.microsoftonline.com';
 const TENANTS_URL = `${ARM}/tenants?api-version=2022-12-01`;
@@ -75,6 +76,7 @@ let cli: AzureCliCredential | null = null;
 const tenantTokens = new Map<string, AccessToken>();
 /** Azure Storage (blob data) tokens per directory, kept apart from the ARM tokens. */
 const storageTokens = new Map<string, AccessToken>();
+const eventHubsTokens = new Map<string, AccessToken>();
 let account: AccountInfo | null = null;
 let activeTenant: string | undefined;
 let pendingSignIn: AbortController | null = null;
@@ -733,6 +735,7 @@ function clearState(): void {
   cli = null;
   tenantTokens.clear();
   storageTokens.clear();
+  eventHubsTokens.clear();
   credential = null;
   account = null;
   activeTenant = undefined;
@@ -774,25 +777,27 @@ export function getCredential(): TokenCredential {
 }
 
 /**
- * Token for Azure Blob Storage data access in the active directory. Blob data is authorized with
- * the user's own Entra identity (Storage Blob Data roles), so no account keys are needed.
+ * Token for a data-plane resource (Blob Storage, Event Hubs) in the active directory, cached per
+ * directory in `cache`. These resources are authorized with the user's own Entra identity through
+ * Azure RBAC data roles, so no keys or connection strings are ever involved.
  */
-export async function getStorageToken(): Promise<string> {
+async function getDataPlaneToken(
+  scopes: string[],
+  cache: Map<string, AccessToken>,
+  what: string,
+): Promise<AccessToken> {
   if (!activeTenant) throw new Error('Choose a directory to continue.');
   const tenantId = activeTenant;
-  const cached = storageTokens.get(key(tenantId));
+  const cached = cache.get(key(tenantId));
   if (cached && cached.expiresOnTimestamp - Date.now() > REFRESH_MARGIN_MS)
-    return cached.token;
+    return cached;
 
   const started = generation;
   let token: AccessToken;
   if (method === 'cli') {
     if (!cli) throw new Error(SIGNED_OUT);
-    const t = await cli.getToken(STORAGE_SCOPES, {
-      tenantId,
-      enableCae: false,
-    });
-    if (!t) throw new Error('Azure did not return a storage access token.');
+    const t = await cli.getToken(scopes, { tenantId, enableCae: false });
+    if (!t) throw new Error(`Azure did not return ${what} access token.`);
     token = t;
   } else {
     if (!pca || !msalAccount) throw new Error(SIGNED_OUT);
@@ -801,21 +806,42 @@ export async function getStorageToken(): Promise<string> {
       token = toAccessToken(
         await pca.acquireTokenSilent({
           account: msalAccount,
-          scopes: STORAGE_SCOPES,
+          scopes,
           authority,
           forceRefresh: true,
         }),
       );
     } catch (err) {
       if (!(err instanceof InteractionRequiredAuthError)) throw err;
-      token = toAccessToken(
-        await interactive(authority, undefined, STORAGE_SCOPES),
-      );
+      token = toAccessToken(await interactive(authority, undefined, scopes));
     }
   }
   if (generation !== started) throw new Error(SIGNED_OUT);
-  storageTokens.set(key(tenantId), token);
-  return token.token;
+  cache.set(key(tenantId), token);
+  return token;
+}
+
+/** Token for Azure Blob Storage data access (Storage Blob Data roles) in the active directory. */
+export async function getStorageToken(): Promise<string> {
+  return (await getDataPlaneToken(STORAGE_SCOPES, storageTokens, 'a storage'))
+    .token;
+}
+
+/**
+ * Token for Azure Event Hubs data access (needs the Azure Event Hubs Data Receiver role to read)
+ * in the active directory. Event Hubs only accepts tokens for its own audience, so the ARM
+ * credential from getCredential() cannot be used.
+ */
+export function getEventHubsToken(): Promise<AccessToken> {
+  return getDataPlaneToken(EVENT_HUBS_SCOPES, eventHubsTokens, 'an Event Hubs');
+}
+
+/**
+ * A TokenCredential for the Event Hubs SDK. The SDK asks for a token per connection and again
+ * before expiry; each call goes through the per-directory cache.
+ */
+export function getEventHubsCredential(): TokenCredential {
+  return { getToken: () => getEventHubsToken() };
 }
 
 export interface Principal {

@@ -26,6 +26,8 @@ import type {
 import type { CreateIpGroupRequest, IpGroupContext } from './ipGroups';
 import type { RuleImportChoices, RuleImportResult } from './ruleImport';
 import type { ThreatIntelMode } from './deploy';
+import type { EventHubInfo, LogSources } from './logSources';
+import type { LogBatch, LogStreamConfig, LogStreamStatus } from './logStream';
 import type {
   FirewallAllocation,
   FirewallConfiguration,
@@ -82,6 +84,16 @@ export const IPC = {
   deployFirewall: 'deploy:start',
   registerNetworkProvider: 'deploy:registerNetwork',
   deployProgress: 'event:deployProgress',
+  logsGetConfig: 'logs:getConfig',
+  logsGetStatus: 'logs:getStatus',
+  logsStart: 'logs:start',
+  logsStop: 'logs:stop',
+  logsDiscover: 'logs:discover',
+  logsListHubs: 'logs:listHubs',
+  logsListConsumerGroups: 'logs:listConsumerGroups',
+  logsGrantReceiver: 'logs:grantReceiver',
+  logBatch: 'event:logBatch',
+  logStatus: 'event:logStatus',
 } as const;
 
 /** Envelope used for every invoke() so the renderer receives clean error messages. */
@@ -184,4 +196,22 @@ export interface AzNetApi {
   /** Resolves when the deployment finishes (succeeded or failed). */
   deployFirewall(request: DeployRequest): Promise<DeployProgress>;
   onDeployProgress(listener: (progress: DeployProgress) => void): () => void;
+  /** The saved Event Hub for the current directory, or null. */
+  getLogStreamConfig(): Promise<LogStreamConfig | null>;
+  getLogStreamStatus(): Promise<LogStreamStatus>;
+  /** Validates and saves the settings, then (re)connects. Progress arrives as status events. */
+  startLogStream(config: LogStreamConfig): Promise<LogStreamStatus>;
+  stopLogStream(): Promise<void>;
+  /** Event Hubs namespaces, plus what the managed firewalls' diagnostic settings send where. */
+  discoverLogSources(): Promise<LogSources>;
+  listEventHubs(namespaceId: string): Promise<EventHubInfo[]>;
+  listConsumerGroups(namespaceId: string, eventHub: string): Promise<string[]>;
+  /**
+   * Assigns the signed-in user the Event Hubs Data Receiver role on the hub. Writes to Azure;
+   * resolves to the scope that was used.
+   */
+  grantLogReceiver(config: LogStreamConfig): Promise<string>;
+  /** About one batch per second while connected. */
+  onLogBatch(listener: (batch: LogBatch) => void): () => void;
+  onLogStreamStatus(listener: (status: LogStreamStatus) => void): () => void;
 }

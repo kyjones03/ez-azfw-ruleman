@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
 import { ResourceManagementClient } from '@azure/arm-resources';
-import { getCredential, getPrincipal, getStorageToken } from './auth';
+import { getCredential, getStorageToken } from './auth';
+import { grantRole } from './roleAssignments';
 import { describeAzureError, graphQuery } from './azure';
 import { loadState, updateState } from './store';
 import { parseResourceId } from '../shared/resourceId';
@@ -27,7 +27,6 @@ export const HISTORY_CONTAINER_TAG = 'ez-azfw-ruleman-history-container';
 export const DEFAULT_SOFT_DELETE_DAYS = 30;
 
 const ARM_STORAGE_API_VERSION = '2023-05-01';
-const ARM_AUTHORIZATION_API_VERSION = '2022-04-01';
 const BLOB_REST_VERSION = '2023-11-03';
 const ARM_TIMEOUT_MS = 60_000;
 const POLL_MS = 3000;
@@ -294,43 +293,9 @@ export async function setSnapshotStorageAccount(
   return config;
 }
 
-/** Stable per (account, user), so granting twice is harmless. */
-function roleAssignmentName(scope: string, principalId: string): string {
-  const h = createHash('sha256')
-    .update(
-      `${scope.toLowerCase()}|${principalId}|${BLOB_DATA_CONTRIBUTOR_ROLE_ID}`,
-    )
-    .digest('hex');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
-}
-
 /** Gives the signed-in user blob read/write access to a storage account they just created. */
-async function grantBlobDataContributor(
-  storageAccountId: string,
-): Promise<void> {
-  const { subscriptionId } = parseResourceId(storageAccountId);
-  const principal = await getPrincipal();
-  const name = roleAssignmentName(storageAccountId, principal.objectId);
-  try {
-    await armRequest(
-      `${storageAccountId}/providers/Microsoft.Authorization/roleAssignments/${name}?api-version=${ARM_AUTHORIZATION_API_VERSION}`,
-      {
-        method: 'PUT',
-        body: JSON.stringify({
-          properties: {
-            roleDefinitionId: `/subscriptions/${subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/${BLOB_DATA_CONTRIBUTOR_ROLE_ID}`,
-            principalId: principal.objectId,
-            principalType: principal.type,
-          },
-        }),
-      },
-    );
-  } catch (err) {
-    // Already granted (possibly under another assignment name).
-    const e = err as { statusCode?: number; code?: string };
-    if (e.statusCode === 409 || e.code === 'RoleAssignmentExists') return;
-    throw err;
-  }
+function grantBlobDataContributor(storageAccountId: string): Promise<void> {
+  return grantRole(storageAccountId, BLOB_DATA_CONTRIBUTOR_ROLE_ID);
 }
 
 export async function createSnapshotStorageAccount(

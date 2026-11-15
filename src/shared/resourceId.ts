@@ -50,6 +50,7 @@ export const RESOURCE_TYPES = {
   virtualHub: 'Microsoft.Network/virtualHubs',
   deployment: 'Microsoft.Resources/deployments',
   storageAccount: 'Microsoft.Storage/storageAccounts',
+  eventHubNamespace: 'Microsoft.EventHub/namespaces',
   maintenanceConfiguration: 'Microsoft.Maintenance/maintenanceConfigurations',
   publicIp: 'Microsoft.Network/publicIPAddresses',
   subnet: 'Microsoft.Network/virtualNetworks/subnets',
