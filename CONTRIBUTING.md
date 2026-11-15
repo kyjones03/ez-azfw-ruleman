@@ -18,6 +18,26 @@ Thanks for your interest in improving EZ AzFW Manager!
 
 Set `EZAZFW_DEVTOOLS=1` to open development tools on startup. To use your own public-client Entra app registration, set `EZAZFW_CLIENT_ID` with a `http://localhost` redirect URI; `EZAZFW_TENANT_ID` can preselect a directory. The app deliberately ignores `AZURE_CLIENT_ID` and `AZURE_TENANT_ID` so other tools' service-principal settings do not override it.
 
+## Resetting local data
+
+The app keeps drafts, preferences and sign-in in a per-user folder. To test first-run behavior, quit every running instance (`npm start` and installed builds share this folder), then delete it:
+
+| OS      | Folder                                          |
+| ------- | ----------------------------------------------- |
+| Linux   | `~/.config/ez-azfw-ruleman`                     |
+| macOS   | `~/Library/Application Support/ez-azfw-ruleman` |
+| Windows | `%APPDATA%\ez-azfw-ruleman`                     |
+
+Deleting the folder discards saved drafts that were never committed, so copy it first if you need them. The next launch starts at sign-in with no managed firewalls.
+
+To reset only part of it, delete one item while the app is closed:
+
+- `ez-azfw-ruleman-state.json`: drafts, managed firewalls, commit history references, snapshot storage choice, saved session and Event Hub settings for **Firewall logs**.
+- `msal-cache.bin`: the encrypted sign-in tokens (**Sign out** in the app does this too).
+- `Local Storage/`: interface preferences such as the navigation state, auto-refresh interval and filters.
+
+A local reset does not touch Azure. Shared snapshots and commit history stay in your Blob Storage account; choose it again on the **Snapshots** page afterwards.
+
 ## Pull requests
 
 - Keep changes focused; open an issue first for larger changes.
