@@ -44,6 +44,11 @@ import { LogStreamSession } from './eventHub';
 import { createHubClient } from './eventHubClient';
 import { validateLogStreamConfig } from '../shared/logStream';
 import * as logSources from './logSources';
+import * as logProvision from './logProvision';
+import { eventHubNamespaceError } from '../shared/logProvision';
+
+/** How long a freshly assigned Event Hubs role is given to take effect. */
+const ROLE_WAIT_MS = 5 * 60 * 1000;
 import { isThreatIntelMode, type PolicyModeConfig } from '../shared/policyMode';
 import * as resourceSettings from './resourceSettings';
 import {
@@ -165,14 +170,21 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
     }
   });
   handle(IPC.logsGetStatus, () => logSession.status);
-  handle(IPC.logsStart, async (_e, raw: unknown) => {
+  handle(IPC.logsStart, async (_e, raw: unknown, rawOptions: unknown) => {
     const config = validateLogStreamConfig(raw);
+    const waitForRole =
+      !!rawOptions &&
+      typeof rawOptions === 'object' &&
+      (rawOptions as { waitForRole?: unknown }).waitForRole === true;
     const tenantId = auth.getAccount()?.tenantId;
     if (!tenantId) throw new Error('Choose a directory to continue.');
     updateState((s) => {
       s.logStream = { tenantId, config };
     });
-    await logSession.start(config);
+    await logSession.start(
+      config,
+      waitForRole ? { permissionGraceMs: ROLE_WAIT_MS } : {},
+    );
     return logSession.status;
   });
   handle(IPC.logsStop, () => logSession.stop());
@@ -190,6 +202,48 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
         throw new Error('Invalid event hub name.');
       return logSources.listConsumerGroups(namespaceId, hub);
     },
+  );
+  handle(IPC.logsListResourceGroups, (_e, subscriptionId: unknown) =>
+    logSources.listResourceGroups(assertSubscription(subscriptionId)),
+  );
+  handle(
+    IPC.logsSetupContext,
+    (_e, firewallIds: unknown, destinationSubscriptionId: unknown) => {
+      if (
+        !Array.isArray(firewallIds) ||
+        firewallIds.length === 0 ||
+        firewallIds.length > 50
+      )
+        throw new Error('Choose at least one firewall.');
+      for (const id of firewallIds)
+        assertId(id, RESOURCE_TYPES.firewall, 'firewall');
+      return logProvision.getSetupContext(
+        firewallIds as string[],
+        destinationSubscriptionId === undefined
+          ? undefined
+          : assertSubscription(destinationSubscriptionId),
+      );
+    },
+  );
+  handle(
+    IPC.logsSetupCheckName,
+    (_e, subscriptionId: unknown, name: unknown) => {
+      const n = str(name, 'namespace name');
+      const problem = eventHubNamespaceError(n);
+      if (problem) throw new Error(problem);
+      return logProvision.checkNamespaceName(
+        assertSubscription(subscriptionId),
+        n,
+      );
+    },
+  );
+  handle(IPC.logsSetupReview, (_e, raw: unknown) =>
+    logProvision.reviewSetup(raw),
+  );
+  handle(IPC.logsSetupApply, (_e, raw: unknown, reviewHash: unknown) =>
+    logProvision.applySetup(raw, str(reviewHash, 'review'), (progress) =>
+      send(IPC.logSetupProgress, progress),
+    ),
   );
   handle(IPC.logsGrantReceiver, (_e, raw: unknown) =>
     logSources.grantReceiver(validateLogStreamConfig(raw)),

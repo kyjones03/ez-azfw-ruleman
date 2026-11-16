@@ -27,6 +27,12 @@ import type { CreateIpGroupRequest, IpGroupContext } from './ipGroups';
 import type { RuleImportChoices, RuleImportResult } from './ruleImport';
 import type { ThreatIntelMode } from './deploy';
 import type { EventHubInfo, LogSources } from './logSources';
+import type {
+  ProvisionProgress,
+  ProvisionRequest,
+  SetupContext,
+  SetupReview,
+} from './logProvision';
 import type { LogBatch, LogStreamConfig, LogStreamStatus } from './logStream';
 import type {
   FirewallAllocation,
@@ -92,6 +98,12 @@ export const IPC = {
   logsListHubs: 'logs:listHubs',
   logsListConsumerGroups: 'logs:listConsumerGroups',
   logsGrantReceiver: 'logs:grantReceiver',
+  logsListResourceGroups: 'logs:listResourceGroups',
+  logsSetupContext: 'logs:setupContext',
+  logsSetupCheckName: 'logs:setupCheckName',
+  logsSetupReview: 'logs:setupReview',
+  logsSetupApply: 'logs:setupApply',
+  logSetupProgress: 'event:logSetupProgress',
   logBatch: 'event:logBatch',
   logStatus: 'event:logStatus',
 } as const;
@@ -200,7 +212,14 @@ export interface AzNetApi {
   getLogStreamConfig(): Promise<LogStreamConfig | null>;
   getLogStreamStatus(): Promise<LogStreamStatus>;
   /** Validates and saves the settings, then (re)connects. Progress arrives as status events. */
-  startLogStream(config: LogStreamConfig): Promise<LogStreamStatus>;
+  /**
+   * `waitForRole` keeps retrying a missing-role error for a few minutes (use it right after the
+   * role was assigned).
+   */
+  startLogStream(
+    config: LogStreamConfig,
+    options?: { waitForRole?: boolean },
+  ): Promise<LogStreamStatus>;
   stopLogStream(): Promise<void>;
   /** Event Hubs namespaces, plus what the managed firewalls' diagnostic settings send where. */
   discoverLogSources(): Promise<LogSources>;
@@ -211,6 +230,31 @@ export interface AzNetApi {
    * resolves to the scope that was used.
    */
   grantLogReceiver(config: LogStreamConfig): Promise<string>;
+  listLogResourceGroups(
+    subscriptionId: string,
+  ): Promise<{ name: string; location: string }[]>;
+  /** The firewalls' categories, current diagnostic settings and provider state, read from Azure. */
+  getLogSetupContext(
+    firewallIds: string[],
+    destinationSubscriptionId?: string,
+  ): Promise<SetupContext>;
+  checkEventHubNamespaceName(
+    subscriptionId: string,
+    name: string,
+  ): Promise<{ available: boolean; message?: string }>;
+  /** Everything the setup would change in Azure; changes nothing. */
+  reviewLogSetup(request: ProvisionRequest): Promise<SetupReview>;
+  /**
+   * Runs the reviewed setup (writes to Azure). Resolves when it finishes; progress arrives as
+   * events. `reviewHash` must come from the review of the same request.
+   */
+  applyLogSetup(
+    request: ProvisionRequest,
+    reviewHash: string,
+  ): Promise<ProvisionProgress>;
+  onLogSetupProgress(
+    listener: (progress: ProvisionProgress) => void,
+  ): () => void;
   /** About one batch per second while connected. */
   onLogBatch(listener: (batch: LogBatch) => void): () => void;
   onLogStreamStatus(listener: (status: LogStreamStatus) => void): () => void;

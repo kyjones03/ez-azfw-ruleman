@@ -395,3 +395,82 @@ describe('LogStreamSession', () => {
     expect(FakeHub.instances).toHaveLength(1);
   });
 });
+
+describe('LogStreamSession: waiting for a freshly assigned role', () => {
+  const denied = () =>
+    fail(
+      "Unauthorized access. 'Listen' claim(s) are required",
+      'UnauthorizedError',
+    );
+
+  it('retries a missing role during the grace period, then connects', async () => {
+    const t = setup([denied(), denied(), ok].map((f) => f));
+    await t.session.start(CONFIG, { permissionGraceMs: 120_000 });
+    await tick(0);
+    expect(t.last()).toMatchObject({
+      state: 'retrying',
+      errorKind: 'permission',
+    });
+    expect(t.last().detail).toMatch(
+      /waiting for the new role to apply, trying again in 15s \(giving up in 12\ds\)/,
+    );
+    await tick(15_000);
+    expect(t.last().detail).toMatch(/waiting for the new role/);
+    await tick(15_000);
+    expect(t.last().state).toBe('connected');
+    await t.session.stop();
+  });
+
+  it('does not count the waiting as failed attempts', async () => {
+    // Six denied probes would exhaust the three first-connection attempts if they counted.
+    const t = setup([
+      denied(),
+      denied(),
+      denied(),
+      denied(),
+      denied(),
+      denied(),
+      ok,
+    ]);
+    await t.session.start(CONFIG, { permissionGraceMs: 300_000 });
+    await tick(6 * 15_000 + 100);
+    expect(t.last().state).toBe('connected');
+    await t.session.stop();
+  });
+
+  it('gives up with the normal permission error once the grace period is over', async () => {
+    const t = setup([
+      denied(),
+      denied(),
+      denied(),
+      denied(),
+      denied(),
+      denied(),
+    ]);
+    await t.session.start(CONFIG, { permissionGraceMs: 30_000 });
+    await tick(31_000);
+    expect(t.last()).toMatchObject({
+      state: 'failed',
+      errorKind: 'permission',
+    });
+    expect(t.last().hint).toContain('Azure Event Hubs Data Receiver');
+  });
+
+  it('without a grace period a missing role fails at once, as before', async () => {
+    const t = setup([denied()]);
+    await t.session.start(CONFIG);
+    await tick(0);
+    expect(t.last().state).toBe('failed');
+  });
+
+  it('other errors during the grace period still follow the normal retry rules', async () => {
+    const t = setup([fail('connection reset'), ok]);
+    await t.session.start(CONFIG, { permissionGraceMs: 120_000 });
+    await tick(0);
+    expect(t.last()).toMatchObject({
+      state: 'retrying',
+      detail: 'attempt 1/3 in 2s',
+    });
+    await t.session.stop();
+  });
+});

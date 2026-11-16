@@ -10,7 +10,10 @@ export type NameKind =
   | 'ruleCollectionGroup'
   | 'ruleCollection'
   | 'rule'
-  | 'resourceGroup';
+  | 'resourceGroup'
+  | 'eventHubNamespace'
+  | 'eventHub'
+  | 'diagnosticSetting';
 
 interface NameRule {
   label: string;
@@ -60,6 +63,45 @@ export const NAME_RULES: Record<NameKind, NameRule> = {
     startText: '',
     end: /[^.]$/u,
     endText: "can't end with a period",
+  },
+  // Event Hubs namespaces are global DNS names: 6-50 letters, digits and hyphens, starting with a
+  // letter and ending with a letter or digit.
+  eventHubNamespace: {
+    label: 'Event Hubs namespace name',
+    min: 6,
+    max: 50,
+    allowed: /[A-Za-z0-9-]/,
+    allowedText: 'letters, digits and hyphens (-)',
+    start: /^[A-Za-z]/,
+    startText: 'must start with a letter',
+    end: /[A-Za-z0-9]$/,
+    endText: 'must end with a letter or digit',
+  },
+  eventHub: {
+    label: 'Event hub name',
+    min: 1,
+    max: 256,
+    allowed: /[A-Za-z0-9_.-]/,
+    allowedText:
+      'letters, digits, underscores (_), periods (.) and hyphens (-)',
+    start: /^[A-Za-z0-9]/,
+    startText: 'must start with a letter or digit',
+    end: /[A-Za-z0-9]$/,
+    endText: 'must end with a letter or digit',
+  },
+  // Diagnostic setting names may contain almost anything except < > * % & : \ ? + / and control
+  // characters, and can't end with a space or period.
+  diagnosticSetting: {
+    label: 'Diagnostic setting name',
+    min: 1,
+    max: 260,
+    allowed: /[^<>*%&:\\?+/\p{Cc}]/u,
+    allowedText:
+      'any characters except < > * % & : \\ ? + / and control characters',
+    start: /^./u,
+    startText: '',
+    end: /[^ .]$/u,
+    endText: "can't end with a space or period",
   },
 };
 

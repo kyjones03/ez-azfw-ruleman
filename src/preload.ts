@@ -4,6 +4,7 @@ import { IPC, type AzNetApi, type IpcResult } from './shared/ipc';
 import type { CommitProgress } from './shared/types';
 import type { DeployProgress } from './shared/deploy';
 import type { LogBatch, LogStreamStatus } from './shared/logStream';
+import type { ProvisionProgress } from './shared/logProvision';
 
 async function call<T>(channel: string, ...args: unknown[]): Promise<T> {
   const result = (await ipcRenderer.invoke(channel, ...args)) as IpcResult<T>;
@@ -90,13 +91,27 @@ const api: AzNetApi = {
   },
   getLogStreamConfig: () => call(IPC.logsGetConfig),
   getLogStreamStatus: () => call(IPC.logsGetStatus),
-  startLogStream: (config) => call(IPC.logsStart, config),
+  startLogStream: (config, options) => call(IPC.logsStart, config, options),
   stopLogStream: () => call(IPC.logsStop),
   discoverLogSources: () => call(IPC.logsDiscover),
   listEventHubs: (namespaceId) => call(IPC.logsListHubs, namespaceId),
   listConsumerGroups: (namespaceId, eventHub) =>
     call(IPC.logsListConsumerGroups, namespaceId, eventHub),
   grantLogReceiver: (config) => call(IPC.logsGrantReceiver, config),
+  listLogResourceGroups: (subscriptionId) =>
+    call(IPC.logsListResourceGroups, subscriptionId),
+  getLogSetupContext: (firewallIds, destinationSubscriptionId) =>
+    call(IPC.logsSetupContext, firewallIds, destinationSubscriptionId),
+  checkEventHubNamespaceName: (subscriptionId, name) =>
+    call(IPC.logsSetupCheckName, subscriptionId, name),
+  reviewLogSetup: (request) => call(IPC.logsSetupReview, request),
+  applyLogSetup: (request, reviewHash) =>
+    call(IPC.logsSetupApply, request, reviewHash),
+  onLogSetupProgress: (listener) => {
+    const wrapped = (_e: IpcRendererEvent, p: ProvisionProgress) => listener(p);
+    ipcRenderer.on(IPC.logSetupProgress, wrapped);
+    return () => ipcRenderer.removeListener(IPC.logSetupProgress, wrapped);
+  },
   onLogBatch: (listener) => {
     const wrapped = (_e: IpcRendererEvent, b: LogBatch) => listener(b);
     ipcRenderer.on(IPC.logBatch, wrapped);

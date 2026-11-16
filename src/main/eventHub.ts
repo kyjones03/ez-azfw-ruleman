@@ -67,6 +67,8 @@ export const RECONNECT_BACKOFF_S = [2, 5, 10, 30, 60];
 const HEALTHY_MS = 30_000;
 /** After this many failures in a row, stop resuming from remembered offsets and start fresh. */
 const DROP_RESUME_AFTER = 3;
+/** How often to retry while a freshly assigned role is still taking effect. */
+const PERMISSION_RETRY_S = 15;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 // ── error classification ─────────────────────────────────────────────────────
@@ -201,11 +203,19 @@ export class LogStreamSession {
   }
 
   /** Starts (or restarts) streaming. Returns once started; progress arrives through the deps. */
-  async start(config: LogStreamConfig): Promise<void> {
+  /**
+   * Starts (or restarts) streaming. With `permissionGraceMs`, a missing-role error is retried for
+   * that long instead of failing at once: a role assigned a moment ago takes minutes to apply.
+   */
+  async start(
+    config: LogStreamConfig,
+    options: { permissionGraceMs?: number } = {},
+  ): Promise<void> {
     await this.stop();
     const ctl = new AbortController();
     this.ctl = ctl;
-    this.task = this.run(config, ctl.signal).catch((err) => {
+    const graceUntil = Date.now() + (options.permissionGraceMs ?? 0);
+    this.task = this.run(config, ctl.signal, graceUntil).catch((err) => {
       this.setStatus({
         state: 'failed',
         detail: 'unexpected error',
@@ -238,6 +248,7 @@ export class LogStreamSession {
   private async run(
     config: LogStreamConfig,
     signal: AbortSignal,
+    graceUntil = 0,
   ): Promise<void> {
     const { deps } = this;
     const flushMs = deps.flushMs ?? 1000;
@@ -356,9 +367,29 @@ export class LogStreamSession {
 
       if (connectedAt && (gotEvents || Date.now() - connectedAt >= HEALTHY_MS))
         failures = 0;
-      failures++;
       const kind = lastKind ?? classifyError(lastError);
       const error = safeErrorText(lastError);
+      if (kind.kind === 'permission' && Date.now() < graceUntil) {
+        // A role assigned just now has not reached the Event Hubs service yet. Not a failed
+        // attempt: wait and try again until the grace period is over.
+        for (
+          let remaining = PERMISSION_RETRY_S;
+          remaining > 0 && !signal.aborted;
+          remaining--
+        ) {
+          const left = Math.max(0, Math.ceil((graceUntil - Date.now()) / 1000));
+          status({
+            state: 'retrying',
+            detail: `waiting for the new role to apply, trying again in ${remaining}s (giving up in ${left}s)`,
+            error,
+            hint: '',
+            errorKind: 'permission',
+          });
+          await deps.sleep(1000, signal);
+        }
+        continue;
+      }
+      failures++;
       if (kind.terminal) {
         status({
           state: 'failed',

@@ -24,6 +24,7 @@ vi.mock('./store', () => ({
 
 import {
   discoverLogSources,
+  listResourceGroups,
   grantReceiver,
   listConsumerGroups,
   listEventHubs,
@@ -182,5 +183,16 @@ describe('grantReceiver', () => {
       grantReceiver({ ...config, namespace: "x' | take 1 //" }),
     ).rejects.toThrow(/Invalid Event Hubs namespace/);
     expect(mocks.graphQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe('listResourceGroups', () => {
+  it('asks for one subscription and maps the rows', async () => {
+    mocks.graphQuery.mockResolvedValue([{ name: 'rg-a', location: 'eastus2' }]);
+    expect(await listResourceGroups(SUB)).toEqual([
+      { name: 'rg-a', location: 'eastus2' },
+    ]);
+    expect(mocks.graphQuery.mock.calls[0][1]).toBe(SUB);
+    expect(mocks.graphQuery.mock.calls[0][0]).toContain('resourcegroups');
   });
 });

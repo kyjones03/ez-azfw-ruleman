@@ -23,7 +23,10 @@ export interface LogStreamApi {
   config: LogStreamConfig | null;
   buffer: LogBuffer;
   paused: boolean;
-  connect(config: LogStreamConfig): Promise<void>;
+  connect(
+    config: LogStreamConfig,
+    options?: { waitForRole?: boolean },
+  ): Promise<void>;
   disconnect(): Promise<void>;
   pause(): void;
   resume(): void;
@@ -85,14 +88,17 @@ export function LogStreamProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const connect = useCallback(async (next: LogStreamConfig) => {
-    // Rows from another hub would be misleading next to the new ones.
-    if (!sameConfig(statusRef.current.config ?? null, next))
-      dispatch({ type: 'clear' });
-    const started = await window.api.startLogStream(next);
-    setConfig(started.config ?? next);
-    setStatus(started);
-  }, []);
+  const connect = useCallback(
+    async (next: LogStreamConfig, options?: { waitForRole?: boolean }) => {
+      // Rows from another hub would be misleading next to the new ones.
+      if (!sameConfig(statusRef.current.config ?? null, next))
+        dispatch({ type: 'clear' });
+      const started = await window.api.startLogStream(next, options);
+      setConfig(started.config ?? next);
+      setStatus(started);
+    },
+    [],
+  );
 
   const disconnect = useCallback(() => window.api.stopLogStream(), []);
   const pause = useCallback(() => dispatch({ type: 'pause' }), []);

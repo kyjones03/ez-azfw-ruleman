@@ -39,6 +39,8 @@ export interface DiagnosticSettingSummary {
 export interface FirewallLogging {
   firewallId: string;
   firewallName: string;
+  /** Azure region, e.g. "eastus2". */
+  location?: string;
   skuTier?: string;
   settings: DiagnosticSettingSummary[];
   /** Set when the settings could not be read (no Reader/Monitoring Reader on the firewall). */

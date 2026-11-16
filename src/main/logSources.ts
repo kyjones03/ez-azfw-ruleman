@@ -78,6 +78,7 @@ async function readFirewallLogging(): Promise<FirewallLogging[]> {
     const base = {
       firewallId: fw.id,
       firewallName: fw.name,
+      location: fw.location,
       skuTier: fw.skuTier,
     };
     try {
@@ -89,6 +90,23 @@ async function readFirewallLogging(): Promise<FirewallLogging[]> {
       return { ...base, settings: [], readError: describeAzureError(err) };
     }
   });
+}
+
+/** Resource groups of one subscription, for choosing where a new namespace goes. */
+export async function listResourceGroups(
+  subscriptionId: string,
+): Promise<{ name: string; location: string }[]> {
+  const rows = await graphQuery<{ name: string; location: string }>(
+    `resourcecontainers
+     | where type =~ 'microsoft.resources/subscriptions/resourcegroups'
+     | project name, location
+     | order by name asc`,
+    subscriptionId,
+  );
+  return rows.map((r) => ({
+    name: String(r.name),
+    location: String(r.location),
+  }));
 }
 
 export async function discoverLogSources(): Promise<LogSources> {

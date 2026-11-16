@@ -154,6 +154,10 @@ export function FirewallLogs() {
             await stream.connect(next);
             setEditing(false);
           }}
+          onSetupDone={async (next, waitForRole) => {
+            await stream.connect(next, { waitForRole });
+            setEditing(false);
+          }}
         />
       )}
 
@@ -275,9 +279,11 @@ export function FirewallLogs() {
                     );
                     toast(
                       'success',
-                      `Role assigned on ${scope.split('/').pop()}. It can take a few minutes to apply; then choose Connect.`,
+                      `Role assigned on ${scope.split('/').pop()}. Connecting; a new role can take a few minutes to apply.`,
                     );
                     setGranting(false);
+                    // Waits for the role instead of failing at once.
+                    await stream.connect(status.config, { waitForRole: true });
                   } catch (err) {
                     toast('error', errorMessage(err));
                   } finally {
