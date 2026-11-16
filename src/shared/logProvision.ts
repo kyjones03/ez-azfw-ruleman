@@ -40,12 +40,12 @@ export const MAX_RETENTION_HOURS: Record<HubTier, number> = {
 };
 export const DEFAULT_RETENTION_HOURS = 24;
 
-/** Rough monthly prices, from the reference project's notes; re-check before release. */
+/** Rough monthly prices from Microsoft's Event Hubs pricing page (US list prices, one throughput unit). */
 export const COST_NOTE: Record<HubTier, string> = {
   Basic:
-    'about $10 per month plus about $0.03 per million events (approximate)',
+    'about $11 per month plus about $0.03 per million events (approximate; varies by region and agreement)',
   Standard:
-    'about $22 per month plus about $0.03 per million events (approximate)',
+    'about $22 per month plus about $0.03 per million events (approximate; varies by region and agreement)',
 };
 
 // ── request ──────────────────────────────────────────────────────────────────

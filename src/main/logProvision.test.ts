@@ -232,7 +232,7 @@ describe('reviewSetup', () => {
       'fw1: create diagnostic setting "ez-azfw-logs"',
     );
     expect(review.lines.join('\n')).not.toContain('fw9');
-    expect(review.cost).toMatch(/about \$10 per month/);
+    expect(review.cost).toMatch(/about \$11 per month/);
     expect(review.permissions.map((p) => p.what)).toContain(
       'Assign the Data Receiver role',
     );
