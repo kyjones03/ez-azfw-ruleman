@@ -15,6 +15,7 @@ import { FlowTesterPage } from './views/FlowTesterPage';
 import { FirewallLogs } from './views/FirewallLogs';
 import { LogStreamProvider } from './logStream';
 import type { FlowHit } from '../shared/flow';
+import type { LogRuleRef } from '../shared/logRuleRef';
 import { PolicyEditor, type PolicyOption } from './views/PolicyEditor';
 import { CommitDialog } from './views/CommitDialog';
 import { CommitStatus } from './views/CommitStatus';
@@ -65,6 +66,13 @@ export default function App() {
   };
   const [policyId, setPolicyId] = useState<string>();
   const [ruleFocus, setRuleFocus] = useState<FlowHit>();
+  const [logRule, setLogRule] = useState<LogRuleRef>();
+  // The Rules view remounts on every visit, so a request from the logs must not outlive the one
+  // visit it was made for (it would reopen its dialog each time).
+  useEffect(() => {
+    if (tab === 'rules') return;
+    setLogRule(undefined);
+  }, [tab]);
   const [showCommit, setShowCommit] = useState(false);
   const [confirmRevertAll, setConfirmRevertAll] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -553,7 +561,16 @@ export default function App() {
         />
         <main className="flex min-w-0 flex-1 flex-col">
           {tab === 'logs' ? (
-            <FirewallLogs managedFirewalls={managed} />
+            <FirewallLogs
+              managedFirewalls={managed}
+              onOpenRule={(ref) => {
+                // The rules view needs a workspace with the firewall's policy loaded.
+                setStage('workspace');
+                setPolicyId(ref.firewallPolicyId);
+                setLogRule({ ...ref });
+                setTab('rules');
+              }}
+            />
           ) : tab === 'ipGroups' ? (
             <IpGroups
               key={account.tenantId}
@@ -612,6 +629,7 @@ export default function App() {
                   onStatus={setStatus}
                   reloadKey={reloadKey}
                   focus={ruleFocus}
+                  logRule={logRule}
                 />
               )}
               {tab === 'flow' && (

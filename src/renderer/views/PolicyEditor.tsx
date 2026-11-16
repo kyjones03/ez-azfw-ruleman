@@ -39,6 +39,7 @@ import { errorMessage, useToast } from '../components/Toast';
 import { collectionKindOf } from '../../shared/ruleDraft';
 import { ruleMatches } from '../../shared/search';
 import type { FlowHit } from '../../shared/flow';
+import { findLoggedRule, type LogRuleRef } from '../../shared/logRuleRef';
 import { TransferRuleDialog } from './RuleTools';
 import { TreeLines } from '../components/TreeLines';
 import { csvFileName, groupsToCsv, type CsvGroup } from '../../shared/csv';
@@ -183,6 +184,7 @@ export function PolicyEditor({
   onStatus,
   reloadKey,
   focus,
+  logRule,
 }: {
   policies: PolicyOption[];
   policyId?: string;
@@ -192,6 +194,8 @@ export function PolicyEditor({
   reloadKey: number;
   /** A rule to show, e.g. one picked in the flow tester (a new object each time). */
   focus?: FlowHit;
+  /** A rule named by a firewall log row (a new object each time); found by name in the loaded chain. */
+  logRule?: LogRuleRef;
 }) {
   const toast = useToast();
   const [listOpen, setListOpen] = useState(
@@ -269,6 +273,22 @@ export function PolicyEditor({
         focusRule: focus.rule,
       });
   }, [focus, focusDone, view, parents]);
+
+  // A rule named by a log row. Wait until the chain of the firewall's policy has loaded (and not
+  // an earlier policy's), then look the rule up by name; say so when it cannot be found.
+  const [logRuleDone, setLogRuleDone] = useState<LogRuleRef>();
+  useEffect(() => {
+    if (!logRule || logRule === logRuleDone || !view || loading) return;
+    if (!sameResourceId(view.policy.id, logRule.firewallPolicyId)) return;
+    setLogRuleDone(logRule);
+    const found = findLoggedRule(logRule, [view, ...parents]);
+    // Only the group is shown. The edit dialog stays closed: opening a rule for editing straight
+    // from a log row is too easy to do by accident.
+    if (found.found) {
+      setQuery('');
+      setGroupId(found.focus.groupId);
+    } else toast('error', found.reason);
+  }, [logRule, logRuleDone, view, parents, loading, toast]);
 
   // Picker data (IP Groups, service tags…) for the policy's subscription and region.
   const [lookups, setLookups] = useState<LookupsState>({ loading: false });

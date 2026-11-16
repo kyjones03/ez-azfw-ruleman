@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Download,
+  ListTree,
   Pause,
   Play,
   KeyRound,
@@ -20,6 +21,7 @@ import { LogConnectionForm } from './LogConnectionForm';
 import type { FirewallLogRow } from '../../shared/fwLogs';
 import { parseAddress } from '../../shared/ipAddress';
 import { resolveRowOwner, type OwnerFirewall } from '../../shared/logOwner';
+import { logRuleRef, type LogRuleRef } from '../../shared/logRuleRef';
 import { logsCsvFileName, logsToCsv } from '../../shared/logCsv';
 import {
   CATEGORY_OPTIONS,
@@ -84,9 +86,12 @@ function actionClass(action: string): string {
 
 export function FirewallLogs({
   managedFirewalls,
+  onOpenRule,
 }: {
   /** The firewalls managed in this app, to tell which one wrote a row. */
   managedFirewalls: OwnerFirewall[];
+  /** Shows the rule a row matched in the Rules view. */
+  onOpenRule: (ref: LogRuleRef) => void;
 }) {
   const stream = useLogStream();
   const toast = useToast();
@@ -278,6 +283,7 @@ export function FirewallLogs({
               <DetailPanel
                 row={selected}
                 managedFirewalls={managedFirewalls}
+                onOpenRule={onOpenRule}
                 onClose={() => setSelected(undefined)}
               />
             )}
@@ -632,13 +638,16 @@ function LogRow({
 function DetailPanel({
   row,
   managedFirewalls,
+  onOpenRule,
   onClose,
 }: {
   row: FirewallLogRow;
   managedFirewalls: OwnerFirewall[];
+  onOpenRule: (ref: LogRuleRef) => void;
   onClose: () => void;
 }) {
   const owner = resolveRowOwner(row, managedFirewalls);
+  const ruleRef = logRuleRef(row, owner.policyId);
   const fields: [string, string][] = [
     ['Time (UTC)', row.time],
     ['Category', row.category],
@@ -695,6 +704,17 @@ function DetailPanel({
             </div>
           ))}
       </dl>
+      {ruleRef && (
+        <button
+          type="button"
+          className="btn-outline mt-4 h-8 w-full text-xs"
+          title="Shows this rule in the Rules view, in the policy of the firewall that wrote the row."
+          onClick={() => onOpenRule(ruleRef)}
+        >
+          <ListTree size={13} />
+          Open rule
+        </button>
+      )}
     </aside>
   );
 }
