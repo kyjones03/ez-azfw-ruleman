@@ -19,6 +19,7 @@ import { useLogStream } from '../logStream';
 import { LogConnectionForm } from './LogConnectionForm';
 import type { FirewallLogRow } from '../../shared/fwLogs';
 import { parseAddress } from '../../shared/ipAddress';
+import { resolveRowOwner, type OwnerFirewall } from '../../shared/logOwner';
 import { logsCsvFileName, logsToCsv } from '../../shared/logCsv';
 import {
   CATEGORY_OPTIONS,
@@ -81,7 +82,12 @@ function actionClass(action: string): string {
   return 'text-fg-muted';
 }
 
-export function FirewallLogs() {
+export function FirewallLogs({
+  managedFirewalls,
+}: {
+  /** The firewalls managed in this app, to tell which one wrote a row. */
+  managedFirewalls: OwnerFirewall[];
+}) {
   const stream = useLogStream();
   const toast = useToast();
   const { status, config, buffer, paused } = stream;
@@ -271,6 +277,7 @@ export function FirewallLogs() {
             {selected && (
               <DetailPanel
                 row={selected}
+                managedFirewalls={managedFirewalls}
                 onClose={() => setSelected(undefined)}
               />
             )}
@@ -624,11 +631,14 @@ function LogRow({
 
 function DetailPanel({
   row,
+  managedFirewalls,
   onClose,
 }: {
   row: FirewallLogRow;
+  managedFirewalls: OwnerFirewall[];
   onClose: () => void;
 }) {
+  const owner = resolveRowOwner(row, managedFirewalls);
   const fields: [string, string][] = [
     ['Time (UTC)', row.time],
     ['Category', row.category],
@@ -648,6 +658,16 @@ function DetailPanel({
     ['Explicit proxy', row.explicitProxy],
     ['TLS inspected', row.tlsInspected],
     ['Firewall', row.resourceId.split('/').pop() ?? ''],
+    [
+      'Managed here',
+      !row.resourceId
+        ? ''
+        : owner.firewall
+          ? owner.policyName
+            ? `Yes, policy ${owner.policyName}`
+            : 'Yes, no policy'
+          : 'No, not one of your managed firewalls',
+    ],
   ];
   return (
     <aside
