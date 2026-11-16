@@ -1,6 +1,7 @@
 // Finds where firewall logs can be read from: Event Hubs namespaces and hubs, and what each
 // firewall's diagnostic settings send where. Read-only except for grantReceiver, which the user
 // confirms explicitly in the UI.
+import { findDanglingSettings } from './logCleanup';
 import { armList, armRequest } from './arm';
 import { discoverFirewalls, graphQuery } from './azure';
 import { grantRole } from './roleAssignments';
@@ -114,7 +115,8 @@ export async function discoverLogSources(): Promise<LogSources> {
     discoverNamespaces(),
     readFirewallLogging(),
   ]);
-  return { namespaces, firewalls };
+  const dangling = await findDanglingSettings(firewalls, namespaces);
+  return { namespaces, firewalls, dangling };
 }
 
 interface ArmEventHub {

@@ -1,8 +1,16 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from 'react';
-import { AlertTriangle, CheckCircle2, Plug, Wrench } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Plug,
+  Trash2,
+  Wrench,
+} from 'lucide-react';
 import { Badge, Spinner } from '../components/ui';
 import { Segmented } from '../components/Segmented';
 import { LogSetupWizard } from './LogSetupWizard';
+import { LogCleanupDialog } from './LogCleanupDialog';
+import type { DanglingSetting } from '../../shared/logCleanup';
 import { errorMessage } from '../components/Toast';
 import {
   detectedHubs,
@@ -88,6 +96,7 @@ export function LogConnectionForm({
     firewallIds: string[];
     hub?: { namespaceId: string; eventHub: string };
   }>();
+  const [cleanup, setCleanup] = useState<DanglingSetting>();
   const [hubs, setHubs] = useState<EventHubInfo[]>([]);
   const [groups, setGroups] = useState<string[]>([]);
 
@@ -138,10 +147,15 @@ export function LogConnectionForm({
     };
   }, [known?.id, knownHub?.name]);
 
-  const detected = useMemo(
-    () => (data ? detectedHubs(data.firewalls) : []),
-    [data],
-  );
+  const dangling = data?.dangling ?? [];
+  // A hub whose namespace is gone can't be read, so it is offered for cleanup instead of "Use".
+  const detected = useMemo(() => {
+    if (!data) return [];
+    const gone = new Set(data.dangling.map((d) => d.namespaceId.toLowerCase()));
+    return detectedHubs(data.firewalls).filter(
+      (h) => !gone.has(h.namespaceId.toLowerCase()),
+    );
+  }, [data]);
   const unreadable = data?.firewalls.filter((f) => f.readError) ?? [];
   /** Readable firewalls that send nowhere an event hub could be read from. */
   const withoutHub =
@@ -231,7 +245,7 @@ export function LogConnectionForm({
               still enter one below.
             </p>
           )}
-          {data && detected.length === 0 && (
+          {data && detected.length === 0 && dangling.length === 0 && (
             <p className="text-sm text-fg-muted">
               No firewall&apos;s diagnostic settings send logs to an Event Hub
               {unreadable.length
@@ -300,6 +314,40 @@ export function LogConnectionForm({
                   </li>
                 );
               })}
+            </ul>
+          )}
+          {dangling.length > 0 && (
+            <ul className="mt-2 divide-y divide-line/60 border border-dashed border-line">
+              {dangling.map((d) => (
+                <li
+                  key={`${d.firewallId}|${d.settingName}`}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                      {d.firewallName}
+                    </span>
+                    <span className="netval block truncate text-fg-muted">
+                      {d.settingName} → {d.namespaceId.split('/').pop()}
+                    </span>
+                  </span>
+                  <Badge
+                    tone="red"
+                    title="Azure keeps a diagnostic setting after the namespace it sends to is deleted. It does nothing and counts towards the limit of five."
+                  >
+                    <AlertTriangle size={11} />
+                    Namespace deleted
+                  </Badge>
+                  <button
+                    type="button"
+                    className="btn-outline h-7 px-2.5 text-xs"
+                    onClick={() => setCleanup(d)}
+                  >
+                    <Trash2 size={13} />
+                    Clean up…
+                  </button>
+                </li>
+              ))}
             </ul>
           )}
           {withoutHub.length > 0 && (
@@ -475,6 +523,15 @@ export function LogConnectionForm({
           )}
         </div>
       </form>
+      {cleanup && (
+        <LogCleanupDialog
+          target={cleanup}
+          onClose={(changed) => {
+            setCleanup(undefined);
+            if (changed) setReload((n) => n + 1);
+          }}
+        />
+      )}
       {wizard && (
         <LogSetupWizard
           sources={data}

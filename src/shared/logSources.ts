@@ -2,6 +2,8 @@
 // settings say about a hub. Pure functions over untrusted Azure JSON, so they are testable.
 import type { LogStreamConfig } from './logStream';
 
+import type { DanglingSetting } from './logCleanup';
+
 export interface EventHubNamespaceInfo {
   id: string;
   name: string;
@@ -50,6 +52,8 @@ export interface FirewallLogging {
 export interface LogSources {
   namespaces: EventHubNamespaceInfo[];
   firewalls: FirewallLogging[];
+  /** Settings that send to a namespace confirmed deleted; offered for cleanup. */
+  dangling: DanglingSetting[];
 }
 
 // ── categories ───────────────────────────────────────────────────────────────

@@ -45,6 +45,7 @@ import { createHubClient } from './eventHubClient';
 import { validateLogStreamConfig } from '../shared/logStream';
 import * as logSources from './logSources';
 import * as logProvision from './logProvision';
+import * as logCleanup from './logCleanup';
 import { eventHubNamespaceError } from '../shared/logProvision';
 
 /** How long a freshly assigned Event Hubs role is given to take effect. */
@@ -244,6 +245,20 @@ export function registerIpc(getContents: () => WebContents | undefined): void {
     logProvision.applySetup(raw, str(reviewHash, 'review'), (progress) =>
       send(IPC.logSetupProgress, progress),
     ),
+  );
+  handle(
+    IPC.logsCleanupReview,
+    (_e, firewallId: unknown, settingName: unknown) =>
+      logCleanup.reviewCleanup(firewallId, settingName),
+  );
+  handle(
+    IPC.logsCleanupApply,
+    (_e, firewallId: unknown, settingName: unknown, reviewHash: unknown) =>
+      logCleanup.applyCleanup(
+        firewallId,
+        settingName,
+        str(reviewHash, 'review'),
+      ),
   );
   handle(IPC.logsGrantReceiver, (_e, raw: unknown) =>
     logSources.grantReceiver(validateLogStreamConfig(raw)),

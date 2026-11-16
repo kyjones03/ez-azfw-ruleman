@@ -98,6 +98,10 @@ const api: AzNetApi = {
   listConsumerGroups: (namespaceId, eventHub) =>
     call(IPC.logsListConsumerGroups, namespaceId, eventHub),
   grantLogReceiver: (config) => call(IPC.logsGrantReceiver, config),
+  reviewLogCleanup: (firewallId, settingName) =>
+    call(IPC.logsCleanupReview, firewallId, settingName),
+  applyLogCleanup: (firewallId, settingName, reviewHash) =>
+    call(IPC.logsCleanupApply, firewallId, settingName, reviewHash),
   listLogResourceGroups: (subscriptionId) =>
     call(IPC.logsListResourceGroups, subscriptionId),
   getLogSetupContext: (firewallIds, destinationSubscriptionId) =>

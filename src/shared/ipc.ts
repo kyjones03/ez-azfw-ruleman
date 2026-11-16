@@ -27,6 +27,7 @@ import type { CreateIpGroupRequest, IpGroupContext } from './ipGroups';
 import type { RuleImportChoices, RuleImportResult } from './ruleImport';
 import type { ThreatIntelMode } from './deploy';
 import type { EventHubInfo, LogSources } from './logSources';
+import type { CleanupReview } from './logCleanup';
 import type {
   ProvisionProgress,
   ProvisionRequest,
@@ -98,6 +99,8 @@ export const IPC = {
   logsListHubs: 'logs:listHubs',
   logsListConsumerGroups: 'logs:listConsumerGroups',
   logsGrantReceiver: 'logs:grantReceiver',
+  logsCleanupReview: 'logs:cleanupReview',
+  logsCleanupApply: 'logs:cleanupApply',
   logsListResourceGroups: 'logs:listResourceGroups',
   logsSetupContext: 'logs:setupContext',
   logsSetupCheckName: 'logs:setupCheckName',
@@ -230,6 +233,17 @@ export interface AzNetApi {
    * resolves to the scope that was used.
    */
   grantLogReceiver(config: LogStreamConfig): Promise<string>;
+  /** Review removing the Event Hub destination of a setting whose namespace was deleted. Changes nothing. */
+  reviewLogCleanup(
+    firewallId: string,
+    settingName: string,
+  ): Promise<CleanupReview>;
+  /** Apply a reviewed cleanup; refuses if Azure changed since the review. Writes to Azure directly. */
+  applyLogCleanup(
+    firewallId: string,
+    settingName: string,
+    reviewHash: string,
+  ): Promise<{ action: 'trim' | 'delete' }>;
   listLogResourceGroups(
     subscriptionId: string,
   ): Promise<{ name: string; location: string }[]>;
