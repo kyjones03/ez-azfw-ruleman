@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Firewall logs.** A new tab streams Azure Firewall diagnostic logs live from an Event Hub, read with your own Microsoft Entra sign-in (no connection strings or keys). Filter by category, source, destination, action, protocol and port; hide DNS queries (on by default); pause without losing rows; open a row for all of its fields, including whether the firewall is one you manage here and which policy it uses. Rows are kept in memory only (newest 5,000) and cleared on sign-out and directory switch. **Export CSV** saves the rows shown to a file you choose.
+- **Logs linked to your rules.** **Open rule** takes a row that matched a rule to its rule collection group in your policy (including a parent policy's group, which stays read-only); it does not open the rule for editing. **Create an Allow rule…** on a denied network or application rule row opens the rule editor with the narrowest rule the log allows (exact source, destination, protocol and port), after you pick one of the policy's rule collection groups and an Allow collection, or a new one. It warns when the rule would not take effect because a Deny rule is processed first, such as one in a parent policy or an earlier collection. The rule goes into your draft like any other and reaches Azure only when you review and commit.
+- **Set up logging.** A wizard creates what a firewall needs to send logs to an Event Hub: a namespace and event hub (or reuse yours), a Send-only access rule, the firewall's diagnostic setting, and the Azure Event Hubs Data Receiver role for you. Everything it changes is listed for review first, and it will not run if Azure changed since the review. **It writes to Azure directly, not through your draft.** Diagnostic settings are merged, never replaced, so Log Analytics and Storage destinations stay. New namespaces have local (key) authentication turned off. It registers the `Microsoft.EventHub` and `Microsoft.Insights` resource providers when they are not registered. A missing permission to assign roles ends as a manual step.
+- **Clean up deleted destinations.** A diagnostic setting that sends to an Event Hubs namespace that no longer exists is flagged, with a **Clean up** action that removes only the Event Hub destination (or deletes the setting when that was its only destination). Only a namespace Azure reports as not found is offered.
+
+### Changed
+
+- New dependency: `@azure/event-hubs`. Reading logs needs outbound AMQP on port 5671 to `*.servicebus.windows.net`.
+
 ## [1.5.1] - 2026-11-11
 
 ### Fixed

@@ -22,6 +22,7 @@ A cross-platform desktop app for managing Azure Firewalls, policies, rules and I
 - Save shared commit history and policy snapshots, and stage rollbacks.
 - Test which rule would match a traffic flow, including inherited rules and your draft.
 - Deploy new firewalls and create IP groups with validated input.
+- Watch live firewall logs from an Event Hub, with a guided setup for the Event Hub and diagnostic setting.
 
 ## Download and run
 
@@ -62,6 +63,20 @@ In **Rules**, choose **Import rules from CSV → Download template**. Fill in th
 - Flagged rules are skipped by default; explicitly choose replacements or imports where appropriate.
 - Overlap warnings are advisory, not proof of which rule Azure will apply.
 
+### Firewall logs
+
+The **Firewall logs** tab streams Azure Firewall diagnostic logs from an Event Hub, using your own sign-in. Nothing is stored in a connection string or key, and rows are kept in memory only: the newest 5,000, cleared when you sign out or switch directory. **Export CSV** writes the rows shown to a file you choose.
+
+- Pick a hub the app detected from your firewalls' diagnostic settings, or type a namespace and event hub.
+- **Set up logging…** creates the Event Hub and the firewall's diagnostic setting for you. Review lists every change before anything happens; the setting is merged with the existing one, never replaced, and the app sends the rule categories plus the threat intelligence, IDPS and DNS categories the firewall offers. FlowTrace and FatFlow are opt-in because they are very noisy.
+- A firewall's Event Hub must be in the **same region** as the firewall, and a firewall can have at most **five** diagnostic settings.
+- A diagnostic setting that sends to a deleted namespace is flagged, and **Clean up…** removes it.
+- For a row from a firewall you manage, the details panel shows the policy it uses. **Open rule** goes to the rule collection group of the rule the row matched (it does not open the rule for editing). On a denied network or application rule row, **Create an Allow rule…** opens the rule editor with a rule for exactly that flow: you choose a rule collection group and an Allow collection (or a new one), and it warns when a Deny rule would still win, for example one in a parent policy. IPv6 flows and other row types are not offered. The rule goes into your draft; review and commit as usual.
+- Reading needs outbound access on port 5671 to `*.servicebus.windows.net`. The first events can take 10 to 15 minutes after setup, and a new role can take a few minutes to apply.
+- Cost: the wizard creates a **Basic** namespace by default (about $11 per month, one throughput unit) or **Standard** (about $22 per month), plus about $0.03 per million events. These are US list prices and vary by region and agreement; see [Event Hubs pricing](https://azure.microsoft.com/pricing/details/event-hubs/). There is no automatic removal; delete the namespace when you no longer need it.
+
+**Set up logging and Clean up write directly to Azure, not through your draft**, like IP group creation and deployment. Rules created from a log row do go through your draft.
+
 ### Before changing live resources
 
 - Stopping a firewall interrupts traffic. Restart can change its private IP or be delayed by capacity; public IP and other resource charges can continue while stopped.
@@ -80,6 +95,10 @@ The app uses your own Azure permissions.
 | Deploy resources                              | **Contributor** on the target resource group; subscription access if creating groups       |
 | Read/write shared snapshots and history       | **Storage Blob Data Contributor** on the chosen storage account                            |
 | Create snapshot storage and grant blob access | **Contributor** plus **Owner** or **User Access Administrator** for role assignment        |
+| Read live firewall logs                       | **Azure Event Hubs Data Receiver** on the event hub or namespace (Reader is not enough)    |
+| Set up logging (Event Hub and diagnostic)     | **Contributor** on the resource group, **Monitoring Contributor** on the firewall          |
+| Assign yourself the Data Receiver role        | **Owner** or **User Access Administrator** on the event hub                                |
+| Clean up a deleted destination                | **Monitoring Contributor** on the firewall                                                 |
 
 Maintenance assignments need the corresponding read/write/delete permissions. TLS setup also requires identity-assignment permission, and the selected identity must already have Key Vault secret access.
 
@@ -89,7 +108,9 @@ Drafts, preferences and restart references stay in your user profile under the l
 
 Policy snapshots and shared history use an Azure Blob Storage account you choose. Configure this on the **Snapshots** page before committing; the account needs separate snapshot and history containers.
 
-The app sends no telemetry or data to the maintainers. It connects to Microsoft Entra ID, Azure Resource Manager and your selected Azure Blob Storage using your sign-in.
+Firewall logs are held in memory only, never written to disk unless you export them. Log rows contain client IP addresses and destinations, so treat an exported CSV as sensitive.
+
+The app sends no telemetry or data to the maintainers. It connects to Microsoft Entra ID, Azure Resource Manager, your selected Azure Blob Storage and, for Firewall logs, your Event Hubs namespace, using your sign-in.
 
 ## Screenshots
 
@@ -155,5 +176,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development and release instructions,
 ## License and disclaimer
 
 [MIT](LICENSE) © 2026 samsmith-MSFT. This software is provided as-is and can affect network connectivity and security; review changes and keep backups.
+
+The Firewall logs parser is ported from [az-firewall-watch](https://github.com/cloudchristoph/az-firewall-watch) by CloudChristoph (MIT), which builds on [azure-firewall-mon](https://github.com/nicolgit/azure-firewall-mon) by Nicola Delfino (MIT). See [NOTICE](NOTICE).
 
 This is not an official Microsoft product. Azure and Azure Firewall are Microsoft trademarks.
