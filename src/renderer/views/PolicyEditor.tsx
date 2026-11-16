@@ -36,9 +36,15 @@ import { ConfirmModal } from '../components/Modal';
 import { EmptyState, Badge, Truncate, ValueList } from '../components/ui';
 import { QuipSpinner } from '../components/QuipSpinner';
 import { errorMessage, useToast } from '../components/Toast';
-import { collectionKindOf } from '../../shared/ruleDraft';
+import {
+  collectionKindOf,
+  type CollectionKind,
+  type RuleRow,
+} from '../../shared/ruleDraft';
 import { ruleMatches } from '../../shared/search';
 import type { FlowHit } from '../../shared/flow';
+import { LogRuleDialog } from './LogRuleDialog';
+import type { RuleSuggestion } from '../../shared/logRuleSuggest';
 import { findLoggedRule, type LogRuleRef } from '../../shared/logRuleRef';
 import { TransferRuleDialog } from './RuleTools';
 import { TreeLines } from '../components/TreeLines';
@@ -80,7 +86,10 @@ type ModalState =
       focusRule?: string;
       addRule?: boolean;
       duplicateRule?: string;
+      /** A rule from a firewall log row; see LogRuleDialog. */
+      prefill?: { row: RuleRow; kind: CollectionKind; newName?: string };
     }
+  | { kind: 'logRule'; suggestion: RuleSuggestion }
   | { kind: 'group' }
   | { kind: 'newGroup' }
   | { kind: 'import' }
@@ -185,6 +194,7 @@ export function PolicyEditor({
   reloadKey,
   focus,
   logRule,
+  newRule,
 }: {
   policies: PolicyOption[];
   policyId?: string;
@@ -196,6 +206,8 @@ export function PolicyEditor({
   focus?: FlowHit;
   /** A rule named by a firewall log row (a new object each time); found by name in the loaded chain. */
   logRule?: LogRuleRef;
+  /** A denied flow to turn into an Allow rule (a new object each time). */
+  newRule?: { suggestion: RuleSuggestion; firewallPolicyId: string };
 }) {
   const toast = useToast();
   const [listOpen, setListOpen] = useState(
@@ -289,6 +301,15 @@ export function PolicyEditor({
       setGroupId(found.focus.groupId);
     } else toast('error', found.reason);
   }, [logRule, logRuleDone, view, parents, loading, toast]);
+
+  // A denied flow from the logs: ask where the rule goes once the firewall's policy has loaded.
+  const [newRuleDone, setNewRuleDone] = useState<typeof newRule>();
+  useEffect(() => {
+    if (!newRule || newRule === newRuleDone || !view || loading) return;
+    if (!sameResourceId(view.policy.id, newRule.firewallPolicyId)) return;
+    setNewRuleDone(newRule);
+    setModal({ kind: 'logRule', suggestion: newRule.suggestion });
+  }, [newRule, newRuleDone, view, loading]);
 
   // Picker data (IP Groups, service tags…) for the policy's subscription and region.
   const [lookups, setLookups] = useState<LookupsState>({ loading: false });
@@ -1491,8 +1512,38 @@ export function PolicyEditor({
             focusRule={modal.focusRule}
             addRule={modal.addRule}
             duplicateRule={modal.duplicateRule}
+            prefill={modal.prefill}
             onClose={() => setModal(null)}
             onSave={(c) => saveCollection(c, modal.collection)}
+          />
+        )}
+        {modal?.kind === 'logRule' && view && (
+          <LogRuleDialog
+            suggestion={modal.suggestion}
+            view={view}
+            parents={parents}
+            onClose={() => setModal(null)}
+            onChoose={({ groupId: target, collection }) => {
+              const names = new Set(
+                (
+                  view.groups.find((g) => g.group.id === target)?.group
+                    .ruleCollections ?? []
+                ).map((c) => c.name.toLowerCase()),
+              );
+              let name = 'allow-logged-flows';
+              for (let n = 2; names.has(name); n++)
+                name = `allow-logged-flows-${n}`;
+              setGroupId(target);
+              setModal({
+                kind: 'collection',
+                collection,
+                prefill: {
+                  row: modal.suggestion.row,
+                  kind: modal.suggestion.kind,
+                  newName: name,
+                },
+              });
+            }}
           />
         )}
         {modal?.kind === 'group' && current && (

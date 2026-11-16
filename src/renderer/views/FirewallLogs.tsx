@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Download,
   ListTree,
+  ShieldPlus,
   Pause,
   Play,
   KeyRound,
@@ -22,6 +23,11 @@ import type { FirewallLogRow } from '../../shared/fwLogs';
 import { parseAddress } from '../../shared/ipAddress';
 import { resolveRowOwner, type OwnerFirewall } from '../../shared/logOwner';
 import { logRuleRef, type LogRuleRef } from '../../shared/logRuleRef';
+import {
+  canSuggestRule,
+  suggestRuleFromRow,
+  type RuleSuggestion,
+} from '../../shared/logRuleSuggest';
 import { logsCsvFileName, logsToCsv } from '../../shared/logCsv';
 import {
   CATEGORY_OPTIONS,
@@ -87,11 +93,14 @@ function actionClass(action: string): string {
 export function FirewallLogs({
   managedFirewalls,
   onOpenRule,
+  onCreateRule,
 }: {
   /** The firewalls managed in this app, to tell which one wrote a row. */
   managedFirewalls: OwnerFirewall[];
   /** Shows the rule a row matched in the Rules view. */
   onOpenRule: (ref: LogRuleRef) => void;
+  /** Starts an Allow rule for a denied flow in the policy of the firewall that wrote the row. */
+  onCreateRule: (suggestion: RuleSuggestion, firewallPolicyId: string) => void;
 }) {
   const stream = useLogStream();
   const toast = useToast();
@@ -284,6 +293,7 @@ export function FirewallLogs({
                 row={selected}
                 managedFirewalls={managedFirewalls}
                 onOpenRule={onOpenRule}
+                onCreateRule={onCreateRule}
                 onClose={() => setSelected(undefined)}
               />
             )}
@@ -639,15 +649,19 @@ function DetailPanel({
   row,
   managedFirewalls,
   onOpenRule,
+  onCreateRule,
   onClose,
 }: {
   row: FirewallLogRow;
   managedFirewalls: OwnerFirewall[];
   onOpenRule: (ref: LogRuleRef) => void;
+  onCreateRule: (suggestion: RuleSuggestion, firewallPolicyId: string) => void;
   onClose: () => void;
 }) {
   const owner = resolveRowOwner(row, managedFirewalls);
   const ruleRef = logRuleRef(row, owner.policyId);
+  const suggested =
+    canSuggestRule(row) && owner.policyId ? suggestRuleFromRow(row) : undefined;
   const fields: [string, string][] = [
     ['Time (UTC)', row.time],
     ['Category', row.category],
@@ -714,6 +728,24 @@ function DetailPanel({
           <ListTree size={13} />
           Open rule
         </button>
+      )}
+      {suggested?.ok && owner.policyId && (
+        <button
+          type="button"
+          className="btn-outline mt-2 h-8 w-full text-xs"
+          title="Opens the rule editor with an Allow rule for exactly this flow. Nothing reaches Azure until you commit."
+          onClick={() =>
+            owner.policyId && onCreateRule(suggested.suggestion, owner.policyId)
+          }
+        >
+          <ShieldPlus size={13} />
+          Create an Allow rule…
+        </button>
+      )}
+      {suggested && !suggested.ok && (
+        <p className="mt-2 text-xs text-fg-faint">
+          Can&apos;t suggest a rule: {suggested.reason}
+        </p>
       )}
     </aside>
   );

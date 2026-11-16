@@ -18,6 +18,8 @@ import {
   isBlankRow,
   validateDraft,
   type CollectionDraft,
+  type CollectionKind,
+  type RuleRow,
 } from '../../shared/ruleDraft';
 import type { RuleCollection } from '../../shared/types';
 
@@ -47,6 +49,7 @@ export function CollectionEditor({
   focusRule,
   addRule,
   duplicateRule,
+  prefill,
   onSave,
   onClose,
 }: {
@@ -58,14 +61,21 @@ export function CollectionEditor({
   focusRule?: string;
   addRule?: boolean;
   duplicateRule?: string;
+  /** A rule to start with (from a firewall log row), added in a new collection or an existing one. */
+  prefill?: { row: RuleRow; kind: CollectionKind; newName?: string };
   onSave: (c: RuleCollection) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [{ initial, focusKey }] = useState(() => {
     const d = collection
       ? draftFromCollection(collection)
-      : emptyCollection(suggestedPriority);
+      : emptyCollection(suggestedPriority, prefill?.kind);
     let focus: string | undefined;
+    if (!collection && prefill) {
+      d.rows = [prefill.row];
+      d.name = prefill.newName ?? '';
+      focus = prefill.row.key;
+    }
     if (collection) {
       if (duplicateRule) {
         const i = d.rows.findIndex((r) => r.name === duplicateRule);
@@ -77,6 +87,10 @@ export function CollectionEditor({
           d.rows.splice(i + 1, 0, copy);
           focus = copy.key;
         }
+      }
+      if (prefill) {
+        d.rows.push(prefill.row);
+        focus ??= prefill.row.key;
       }
       // A trailing empty row is always ready for the next rule.
       const blank = emptyRow(d.kind);

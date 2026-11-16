@@ -16,6 +16,7 @@ import { FirewallLogs } from './views/FirewallLogs';
 import { LogStreamProvider } from './logStream';
 import type { FlowHit } from '../shared/flow';
 import type { LogRuleRef } from '../shared/logRuleRef';
+import type { RuleSuggestion } from '../shared/logRuleSuggest';
 import { PolicyEditor, type PolicyOption } from './views/PolicyEditor';
 import { CommitDialog } from './views/CommitDialog';
 import { CommitStatus } from './views/CommitStatus';
@@ -67,11 +68,16 @@ export default function App() {
   const [policyId, setPolicyId] = useState<string>();
   const [ruleFocus, setRuleFocus] = useState<FlowHit>();
   const [logRule, setLogRule] = useState<LogRuleRef>();
+  const [newRule, setNewRule] = useState<{
+    suggestion: RuleSuggestion;
+    firewallPolicyId: string;
+  }>();
   // The Rules view remounts on every visit, so a request from the logs must not outlive the one
   // visit it was made for (it would reopen its dialog each time).
   useEffect(() => {
     if (tab === 'rules') return;
     setLogRule(undefined);
+    setNewRule(undefined);
   }, [tab]);
   const [showCommit, setShowCommit] = useState(false);
   const [confirmRevertAll, setConfirmRevertAll] = useState(false);
@@ -570,6 +576,12 @@ export default function App() {
                 setLogRule({ ...ref });
                 setTab('rules');
               }}
+              onCreateRule={(suggestion, firewallPolicyId) => {
+                setStage('workspace');
+                setPolicyId(firewallPolicyId);
+                setNewRule({ suggestion, firewallPolicyId });
+                setTab('rules');
+              }}
             />
           ) : tab === 'ipGroups' ? (
             <IpGroups
@@ -630,6 +642,7 @@ export default function App() {
                   reloadKey={reloadKey}
                   focus={ruleFocus}
                   logRule={logRule}
+                  newRule={newRule}
                 />
               )}
               {tab === 'flow' && (
