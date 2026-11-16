@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  Download,
   Pause,
   Play,
   KeyRound,
@@ -18,6 +19,7 @@ import { useLogStream } from '../logStream';
 import { LogConnectionForm } from './LogConnectionForm';
 import type { FirewallLogRow } from '../../shared/fwLogs';
 import { parseAddress } from '../../shared/ipAddress';
+import { logsCsvFileName, logsToCsv } from '../../shared/logCsv';
 import {
   CATEGORY_OPTIONS,
   filterRows,
@@ -98,6 +100,19 @@ export function FirewallLogs() {
   const set = (patch: Partial<LogFilters>) =>
     setFilters((f) => ({ ...f, ...patch }));
 
+  const exportCsv = async () => {
+    try {
+      const saved = await window.api.saveCsv(
+        logsCsvFileName(),
+        logsToCsv(visible),
+      );
+      if (saved)
+        toast('success', `Exported ${visible.length} rows to ${saved}`);
+    } catch (err) {
+      toast('error', errorMessage(err));
+    }
+  };
+
   const toggleConnection = async () => {
     try {
       if (running) await stream.disconnect();
@@ -142,7 +157,7 @@ export function FirewallLogs() {
         </div>
         <p className="mt-1 text-sm text-fg-muted">
           Live Azure Firewall diagnostic logs from an Event Hub, read with your
-          own sign-in. Nothing is saved to disk.
+          own sign-in. Nothing is saved to disk unless you export it.
         </p>
       </div>
 
@@ -222,6 +237,16 @@ export function FirewallLogs() {
             >
               <Trash2 size={13} />
               Clear
+            </button>
+            <button
+              type="button"
+              className="btn-ghost h-7 px-2 text-xs"
+              disabled={visible.length === 0}
+              title="Saves the rows shown (after filters) to a CSV file you choose."
+              onClick={() => void exportCsv()}
+            >
+              <Download size={13} />
+              Export CSV
             </button>
             {paused && (
               <Badge tone="blue">
