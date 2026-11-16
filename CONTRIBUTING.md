@@ -10,7 +10,7 @@ Thanks for your interest in improving EZ AzFW Manager!
 
 ## Development
 
-1. Install Node.js 22 or later, then run `npm ci`.
+1. Install Node.js 22 or later, then run `npm ci`. On Windows, also install the [Microsoft Visual C++ Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) (`winget install Microsoft.VCRedist.2015+.x64`); a clean machine without it fails during `electron-forge package` with "The specified module could not be found" from `@electron-internal/extract-zip`.
 2. Start the app with `npm start`.
 3. Before opening a pull request, run `npm run verify` (lint, type-check, and tests) and make sure it passes.
 
