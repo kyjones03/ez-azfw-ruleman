@@ -74,6 +74,19 @@ describe('discoverLogSources', () => {
     mocks.graphQuery.mockResolvedValue(namespaces);
   };
 
+  it('maps the public network access of a namespace, and nothing when Azure sends none', async () => {
+    mocks.discoverFirewalls.mockResolvedValue([]);
+    mocks.graphQuery.mockResolvedValue([
+      { ...namespaces[0], publicNetworkAccess: 'Disabled' },
+      { ...namespaces[0], name: 'other', publicNetworkAccess: '' },
+    ]);
+    const result = await discoverLogSources();
+    expect(result.namespaces.map((n) => n.publicNetworkAccess)).toEqual([
+      'Disabled',
+      undefined,
+    ]);
+  });
+
   it('maps namespaces and reads settings only for the managed firewalls', async () => {
     wire();
     mocks.managed = [fwId('FW2')]; // IDs are case-insensitive

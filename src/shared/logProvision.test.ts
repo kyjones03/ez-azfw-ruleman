@@ -554,6 +554,44 @@ describe('validateProvisionRequest', () => {
   const check = (req: ProvisionRequest, c = ctx()) =>
     validateProvisionRequest(req, c);
 
+  describe('namespace network access', () => {
+    const withNetwork = (
+      publicNetworkAccess?: string,
+      namespaceId = NS_ID,
+    ) => ({
+      ...ctx(),
+      destinationNetwork: { namespaceId, publicNetworkAccess },
+    });
+    it('warns, without blocking, when the existing namespace has public access disabled', () => {
+      const result = check(existingReq(), withNetwork('Disabled'));
+      expect(result.errors).toEqual([]);
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toMatch(/public network access disabled/);
+    });
+    it('matches the value and the namespace ID case-insensitively', () => {
+      expect(
+        check(existingReq(), withNetwork('disabled', NS_ID.toUpperCase()))
+          .warnings,
+      ).toHaveLength(1);
+    });
+    it.each(['Enabled', 'SecuredByPerimeter', undefined])(
+      'does not warn when public access is %s',
+      (value) => {
+        expect(check(existingReq(), withNetwork(value)).warnings).toEqual([]);
+      },
+    );
+    it('does not warn about another namespace, or when the setting was not read', () => {
+      expect(
+        check(existingReq(), withNetwork('Disabled', `${NS_ID}-other`))
+          .warnings,
+      ).toEqual([]);
+      expect(check(existingReq()).warnings).toEqual([]);
+    });
+    it('never warns for a new namespace', () => {
+      expect(check(newReq(), withNetwork('Disabled')).warnings).toEqual([]);
+    });
+  });
+
   it('accepts a good request for a new Basic namespace', () => {
     expect(check(newReq())).toEqual({ errors: [], warnings: [] });
   });

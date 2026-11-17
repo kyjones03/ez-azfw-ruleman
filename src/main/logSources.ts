@@ -25,13 +25,13 @@ const CONCURRENCY = 4;
 const NAMESPACE_QUERY = `
 resources
 | where type =~ 'microsoft.eventhub/namespaces'
-| extend skuTier = tostring(sku.tier)
+| extend skuTier = tostring(sku.tier), publicNetworkAccess = tostring(properties.publicNetworkAccess)
 | join kind=leftouter (
     resourcecontainers
     | where type =~ 'microsoft.resources/subscriptions'
     | project subscriptionId, subscriptionName = name
   ) on subscriptionId
-| project id, name, subscriptionId, subscriptionName, resourceGroup, location, skuTier
+| project id, name, subscriptionId, subscriptionName, resourceGroup, location, skuTier, publicNetworkAccess
 | order by subscriptionName asc, name asc`;
 
 export async function discoverNamespaces(): Promise<EventHubNamespaceInfo[]> {
@@ -46,6 +46,10 @@ export async function discoverNamespaces(): Promise<EventHubNamespaceInfo[]> {
     resourceGroup: String(r.resourceGroup),
     location: String(r.location),
     skuTier: typeof r.skuTier === 'string' && r.skuTier ? r.skuTier : undefined,
+    publicNetworkAccess:
+      typeof r.publicNetworkAccess === 'string' && r.publicNetworkAccess
+        ? r.publicNetworkAccess
+        : undefined,
   }));
 }
 

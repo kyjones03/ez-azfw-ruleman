@@ -15,7 +15,21 @@ export interface EventHubNamespaceInfo {
   location: string;
   /** Basic, Standard, Premium. Basic only has the $Default consumer group. */
   skuTier?: string;
+  /** "Enabled", "Disabled" or "SecuredByPerimeter"; absent when Azure did not say. */
+  publicNetworkAccess?: string;
 }
+
+/** True when Azure says the namespace has no public endpoint (private endpoints only). */
+export const publicAccessDisabled = (value?: string): boolean =>
+  value?.toLowerCase() === 'disabled';
+
+/** Shown when connecting from this app to a namespace with public network access disabled. */
+export const PUBLIC_ACCESS_DISABLED_READ =
+  'This namespace has public network access disabled. The app reads logs over the public endpoint, so it can only connect from a network that reaches this namespace through a private endpoint.';
+
+/** Shown in the setup review for such a namespace. */
+export const PUBLIC_ACCESS_DISABLED_SETUP =
+  "This namespace has public network access disabled. The app reads logs over the public endpoint, so it can only connect from a network that reaches this namespace through a private endpoint, and Azure may not deliver the firewall's logs to it either. Check the namespace's Networking settings, or use a namespace with public access.";
 
 export interface EventHubInfo {
   name: string;

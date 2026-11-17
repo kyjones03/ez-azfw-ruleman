@@ -18,6 +18,8 @@ import {
   type Coverage,
   type DetectedHub,
   type EventHubInfo,
+  PUBLIC_ACCESS_DISABLED_READ,
+  publicAccessDisabled,
   type LogSources,
 } from '../../shared/logSources';
 import {
@@ -470,6 +472,11 @@ export function LogConnectionForm({
           </div>
         </div>
 
+        {publicAccessDisabled(known?.publicNetworkAccess) && (
+          <p role="status" className="mt-3 text-sm text-deny">
+            {PUBLIC_ACCESS_DISABLED_READ}
+          </p>
+        )}
         {basicTierGroup && (
           <p className="mt-3 text-sm text-fg-muted">
             This namespace is Basic tier, which only has the{' '}

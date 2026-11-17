@@ -16,6 +16,7 @@ import {
   stepLabels,
   toProvisionContext,
   validateProvisionRequest,
+  type DestinationNetwork,
   type FirewallLoggingState,
   type ProviderState,
   type ProvisionPlan,
@@ -161,6 +162,27 @@ export async function checkNamespaceName(
 
 // ── review ───────────────────────────────────────────────────────────────────
 
+/**
+ * Network access of an existing destination namespace, read from Azure (not taken from the
+ * renderer). When it cannot be read there is no warning, never a guess.
+ */
+async function readDestinationNetwork(
+  namespaceId: string,
+): Promise<DestinationNetwork> {
+  try {
+    const { data } = await armRequest<Json>(
+      `${namespaceId}?api-version=${EVENTHUB_API_VERSION}`,
+    );
+    const access = obj(data.properties).publicNetworkAccess;
+    return {
+      namespaceId,
+      publicNetworkAccess: typeof access === 'string' ? access : undefined,
+    };
+  } catch {
+    return { namespaceId };
+  }
+}
+
 /** Rebuilds the request from the renderer's data, with facts about the firewalls from Azure. */
 async function prepare(raw: unknown): Promise<{
   req: ProvisionRequest;
@@ -176,6 +198,10 @@ async function prepare(raw: unknown): Promise<{
     parsed.firewalls.map((f) => f.id),
     destinationSubscription,
   );
+  if (parsed.destination.kind === 'existing')
+    setup.destinationNetwork = await readDestinationNetwork(
+      parsed.destination.namespaceId,
+    );
   const req: ProvisionRequest = {
     ...parsed,
     firewalls: setup.firewalls.map((f) => f.firewall),

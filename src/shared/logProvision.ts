@@ -9,9 +9,12 @@ import {
   CATEGORY_DEFS,
   DATA_RECEIVER_ROLE_ID,
   namespaceShortName,
+  PUBLIC_ACCESS_DISABLED_SETUP,
+  publicAccessDisabled,
 } from './logSources';
 import { DEFAULT_CONSUMER_GROUP, type LogStreamConfig } from './logStream';
 import { nameError } from './naming';
+import { sameResourceId } from './resourceId';
 import {
   isResourceIdOfType,
   parseResourceId,
@@ -107,8 +110,17 @@ export interface ProviderState {
   registered: boolean;
 }
 
+/** What Azure says about the network access of an existing destination namespace. */
+export interface DestinationNetwork {
+  namespaceId: string;
+  /** "Enabled", "Disabled" or "SecuredByPerimeter"; absent when it could not be read. */
+  publicNetworkAccess?: string;
+}
+
 export interface ProvisionContext {
   firewalls: FirewallLoggingState[];
+  /** Left out when not checked (or not readable): no network warning is shown then. */
+  destinationNetwork?: DestinationNetwork;
   /** Left out when not checked; a missing entry is treated as registered. */
   providers?: ProviderState[];
 }
@@ -551,6 +563,11 @@ export function validateProvisionRequest(
       errors.push(
         `This namespace is in ${normalizeLocation(d.namespaceLocation ?? '') || 'an unknown region'}, but the firewall is in ${location}. An event hub must be in the same region as the firewall that sends to it.`,
       );
+    if (
+      sameResourceId(ctx.destinationNetwork?.namespaceId, d.namespaceId) &&
+      publicAccessDisabled(ctx.destinationNetwork?.publicNetworkAccess)
+    )
+      warnings.push(PUBLIC_ACCESS_DISABLED_SETUP);
   } else {
     errors.push('Choose where the logs should go.');
     return { errors, warnings };
@@ -1015,12 +1032,15 @@ export interface SetupFirewall {
 export interface SetupContext {
   firewalls: SetupFirewall[];
   providers: ProviderState[];
+  /** Only for an existing destination namespace, read from Azure. */
+  destinationNetwork?: DestinationNetwork;
 }
 
 export function toProvisionContext(ctx: SetupContext): ProvisionContext {
   return {
     firewalls: ctx.firewalls.flatMap((f) => (f.state ? [f.state] : [])),
     providers: ctx.providers,
+    destinationNetwork: ctx.destinationNetwork,
   };
 }
 

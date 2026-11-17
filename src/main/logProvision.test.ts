@@ -41,6 +41,8 @@ interface World {
   providers: Record<string, string>;
   deployment: string[];
   failOn?: RegExp;
+  /** publicNetworkAccess of the existing destination namespace, as Azure reports it. */
+  namespaceAccess?: string;
   failWith?: { statusCode?: number; message: string };
   calls: { method: string; url: string; body?: any }[];
 }
@@ -68,6 +70,8 @@ function route(path: string, init: RequestInit = {}) {
       ],
     });
   if (/diagnosticSettings\?/.test(path)) return ok({ value: world.settings });
+  if (method === 'GET' && /\/namespaces\/[^/?]+\?api-version/.test(path))
+    return ok({ properties: { publicNetworkAccess: world.namespaceAccess } });
   if (/diagnosticSettings\/[^?]+\?/.test(path) && method === 'PUT')
     return ok({});
   const provider = /\/providers\/(Microsoft\.\w+)(\/register)?\?/.exec(path);
@@ -220,6 +224,51 @@ describe('checkNamespaceName', () => {
       method: 'POST',
       body: { name: 'taken-name' },
     });
+  });
+});
+
+describe('reviewSetup: namespace network access', () => {
+  const existing = {
+    kind: 'existing',
+    namespaceId: NS_ID,
+    namespaceLocation: 'eastus2',
+    tier: 'Basic',
+    eventHub: 'firewall-logs',
+    createEventHub: false,
+    retentionHours: 24,
+  };
+  const review = () =>
+    reviewSetup({
+      ...request({ grantRole: false }),
+      destination: existing,
+    } as unknown as ReturnType<typeof request>);
+  const namespaceReads = () =>
+    world.calls.filter(
+      (c) => c.method === 'GET' && /\/namespaces\/contoso-logs\?/.test(c.url),
+    );
+
+  it('warns, and still lets the review go ahead, when Azure says public access is disabled', async () => {
+    world.namespaceAccess = 'Disabled';
+    const result = await review();
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.join(' ')).toMatch(/public network access disabled/);
+    expect(namespaceReads()).toHaveLength(1);
+  });
+  it('does not warn when public access is enabled', async () => {
+    world.namespaceAccess = 'Enabled';
+    expect((await review()).warnings).toEqual([]);
+  });
+  it('does not warn when the namespace cannot be read', async () => {
+    world.failOn = /GET .*\/namespaces\/contoso-logs\?/;
+    world.failWith = { statusCode: 403, message: 'forbidden' };
+    const result = await review();
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+  it('does not read a namespace when a new one is created', async () => {
+    world.namespaceAccess = 'Disabled';
+    await reviewSetup(request());
+    expect(namespaceReads()).toEqual([]);
   });
 });
 
