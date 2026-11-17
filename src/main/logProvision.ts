@@ -9,6 +9,7 @@ import {
   buildProvisionPlan,
   COST_NOTE,
   DIAGNOSTIC_SETTINGS_API_VERSION,
+  EVENTHUB_API_VERSION,
   explainProvisionError,
   parseProvisionRequest,
   requiredPermissions,
@@ -30,7 +31,6 @@ import {
 import { APP_TAG } from '../shared/deploy';
 import { parseResourceId, sameResourceId } from '../shared/resourceId';
 
-const EVENTHUB_API_VERSION = '2024-01-01';
 const PROVIDERS_API_VERSION = '2021-04-01';
 const DEPLOYMENTS_API_VERSION = '2022-09-01';
 const GROUPS_API_VERSION = '2021-04-01';

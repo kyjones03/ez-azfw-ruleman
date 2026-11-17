@@ -21,10 +21,12 @@ import type {
   EventHubNamespaceInfo,
   FirewallLogging,
 } from '../shared/logSources';
-import { DIAGNOSTIC_SETTINGS_API_VERSION } from '../shared/logProvision';
+import {
+  DIAGNOSTIC_SETTINGS_API_VERSION,
+  EVENTHUB_API_VERSION,
+} from '../shared/logProvision';
 import { sameResourceId } from '../shared/resourceId';
 
-const EVENTHUB_API_VERSION = '2024-01-01';
 const CONCURRENCY = 4;
 
 type Json = Record<string, unknown>;

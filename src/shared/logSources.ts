@@ -1,7 +1,5 @@
 // Where the firewall logs go: Event Hub discovery results and what a firewall's diagnostic
 // settings say about a hub. Pure functions over untrusted Azure JSON, so they are testable.
-import type { LogStreamConfig } from './logStream';
-
 import type { DanglingSetting } from './logCleanup';
 
 export interface EventHubNamespaceInfo {
@@ -269,21 +267,6 @@ export function detectedHubs(
     }
   }
   return out;
-}
-
-/** Fills a config from a detected hub (the consumer group and position keep their defaults). */
-export function configFromDetected(
-  hub: DetectedHub,
-  base: Pick<LogStreamConfig, 'consumerGroup' | 'startPosition'>,
-): Pick<
-  LogStreamConfig,
-  'namespace' | 'eventHub' | 'consumerGroup' | 'startPosition'
-> {
-  return {
-    namespace: `${hub.namespaceName.toLowerCase()}.servicebus.windows.net`,
-    eventHub: hub.eventHub,
-    ...base,
-  };
 }
 
 /** The Event Hub data role the Logs view needs, assignable at hub scope. */

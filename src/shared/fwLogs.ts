@@ -612,8 +612,3 @@ function parseLegacy(
   }
   return failed;
 }
-
-/** Test hook: restarts row ids so snapshots stay stable. */
-export function resetRowIds(): void {
-  counter = 0;
-}

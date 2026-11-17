@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  configFromDetected,
   detectedHubs,
   eventHubCoverage,
   parseDiagnosticSettings,
@@ -249,19 +248,5 @@ describe('detectedHubs', () => {
       eventHub: 'firewall-logs',
     });
     expect(hubs[0].coverage.state).toBe('complete');
-  });
-  it('builds a config with a lower-case FQDN', () => {
-    const [hub] = detectedHubs([fw({ settings: [setting()] })]);
-    expect(
-      configFromDetected(hub, {
-        consumerGroup: '$Default',
-        startPosition: 'latest',
-      }),
-    ).toEqual({
-      namespace: 'contoso-fw.servicebus.windows.net',
-      eventHub: 'firewall-logs',
-      consumerGroup: '$Default',
-      startPosition: 'latest',
-    });
   });
 });

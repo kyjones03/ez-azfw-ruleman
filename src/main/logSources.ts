@@ -7,6 +7,7 @@ import { discoverFirewalls, graphQuery } from './azure';
 import { grantRole } from './roleAssignments';
 import { loadState } from './store';
 import { sameResourceId } from '../shared/resourceId';
+import { EVENTHUB_API_VERSION } from '../shared/logProvision';
 import {
   DATA_RECEIVER_ROLE_ID,
   parseDiagnosticSettings,
@@ -18,7 +19,6 @@ import {
 import { normaliseNamespace, type LogStreamConfig } from '../shared/logStream';
 import { describeAzureError } from './azure';
 
-const EVENTHUB_API_VERSION = '2024-01-01';
 const DIAGNOSTICS_API_VERSION = '2021-05-01-preview';
 const CONCURRENCY = 4;
 
