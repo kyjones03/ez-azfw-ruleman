@@ -62,7 +62,7 @@ function CoverageDetail({ coverage }: { coverage: Coverage }) {
   if (coverage.state === 'none' || !coverage.missingRecommended.length)
     return null;
   return (
-    <span className="text-xs text-fg-faint">
+    <span className="text-xs text-fg-muted">
       Also not sent: {coverage.missingRecommended.join(', ')}
     </span>
   );
@@ -376,7 +376,7 @@ export function LogConnectionForm({
             </ul>
           )}
           {unreadable.length > 0 && detected.length > 0 && (
-            <p className="mt-1 text-xs text-fg-faint">
+            <p className="mt-1 text-xs text-fg-muted">
               Diagnostic settings of{' '}
               {unreadable.map((f) => f.firewallName).join(', ')} couldn&apos;t
               be read (needs Reader or Monitoring Reader).
@@ -501,13 +501,13 @@ export function LogConnectionForm({
           </ul>
         )}
         {data && fqdn && eventHub.trim() && forSelection.length === 0 && (
-          <p className="mt-3 text-xs text-fg-faint">
+          <p className="mt-3 text-xs text-fg-muted">
             None of the firewalls checked send logs to this hub, so it may stay
             quiet.
           </p>
         )}
 
-        <p className="mt-3 text-xs text-fg-faint">
+        <p className="mt-3 text-xs text-fg-muted">
           Uses your signed-in identity. It needs the{' '}
           <span className="text-fg-muted">{LOG_RECEIVER_ROLE}</span> role on the
           event hub or namespace. The Basic tier only offers the{' '}

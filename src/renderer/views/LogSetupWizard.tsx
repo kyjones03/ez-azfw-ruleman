@@ -535,7 +535,7 @@ export function LogSetupWizard({
               { value: 'existing', label: 'Use an existing namespace' },
             ]}
           />
-          <p className="text-xs text-fg-faint">
+          <p className="text-xs text-fg-muted">
             Region:{' '}
             <span className="font-mono text-fg-muted">
               {region || 'unknown'}
@@ -617,13 +617,13 @@ export function LogSetupWizard({
                       {eventHubNamespaceError(namespaceName)}
                     </span>
                   ) : nameState.state === 'checking' ? (
-                    <span className="text-fg-faint">Checking the name…</span>
+                    <span className="text-fg-muted">Checking the name…</span>
                   ) : nameState.state === 'ok' ? (
                     <span className="text-allow">Available</span>
                   ) : nameState.state === 'taken' ? (
                     <span className="text-deny">{nameState.message}</span>
                   ) : (
-                    <span className="text-fg-faint">
+                    <span className="text-fg-muted">
                       Unique across Azure: 6 to 50 letters, digits and hyphens.
                     </span>
                   )}
@@ -753,7 +753,7 @@ export function LogSetupWizard({
             </span>
           </label>
           {destinationProblem && selected.length > 0 && (
-            <p className="text-xs text-fg-faint">{destinationProblem}</p>
+            <p className="text-xs text-fg-muted">{destinationProblem}</p>
           )}
         </section>
       )}
@@ -812,7 +812,7 @@ export function LogSetupWizard({
               onChange={(e) => setSettingName(e.target.value)}
               spellCheck={false}
             />
-            <p className="mt-1 text-xs text-fg-faint">
+            <p className="mt-1 text-xs text-fg-muted">
               If a firewall already has a setting that uses this hub&apos;s
               access rule, that one is updated instead. Other destinations in a
               setting are never removed.
@@ -870,7 +870,7 @@ export function LogSetupWizard({
                     </li>
                   ))}
                 </ul>
-                <p className="mt-1 text-xs text-fg-faint">
+                <p className="mt-1 text-xs text-fg-muted">
                   If you can&apos;t assign roles, everything else still runs and
                   you&apos;re told how to finish by hand.
                 </p>
@@ -971,7 +971,7 @@ function StepIcon({ state }: { state: ProvisionStepState }) {
       return (
         <MinusCircle
           {...common}
-          className="mt-0.5 shrink-0 text-fg-faint"
+          className="mt-0.5 shrink-0 text-fg-muted"
           aria-label="Skipped"
         />
       );
@@ -979,7 +979,7 @@ function StepIcon({ state }: { state: ProvisionStepState }) {
       return (
         <Circle
           {...common}
-          className="mt-0.5 shrink-0 text-fg-faint"
+          className="mt-0.5 shrink-0 text-fg-muted"
           aria-label="Waiting"
         />
       );

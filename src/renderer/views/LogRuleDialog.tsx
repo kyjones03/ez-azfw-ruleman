@@ -128,6 +128,7 @@ export function LogRuleDialog({
             <div>
               <label className="label">Rule collection group</label>
               <SelectMenu
+                label="Rule collection group"
                 value={groupId}
                 widthClass="w-full"
                 options={groups.map((g) => ({
@@ -144,6 +145,7 @@ export function LogRuleDialog({
             <div>
               <label className="label">Rule collection (Allow)</label>
               <SelectMenu
+                label="Rule collection (Allow)"
                 value={collection}
                 widthClass="w-full"
                 options={[

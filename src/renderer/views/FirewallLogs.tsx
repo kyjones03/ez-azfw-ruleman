@@ -294,7 +294,19 @@ export function FirewallLogs({
                 managedFirewalls={managedFirewalls}
                 onOpenRule={onOpenRule}
                 onCreateRule={onCreateRule}
-                onClose={() => setSelected(undefined)}
+                onClose={() => {
+                  const id = selected?.id;
+                  setSelected(undefined);
+                  // Closing the panel hands focus back to the row it described.
+                  if (id)
+                    window.setTimeout(
+                      () =>
+                        document
+                          .querySelector<HTMLElement>(`[data-row-id="${id}"]`)
+                          ?.focus(),
+                      0,
+                    );
+                }}
               />
             )}
           </div>
@@ -381,12 +393,12 @@ function StatusChip({
           ? 'bg-fg-faint'
           : 'bg-azure animate-pulse';
   return (
-    <span
-      role="status"
-      className="inline-flex items-center gap-1.5 rounded border border-line bg-ink-900 px-2.5 py-0.5 text-xs text-fg-muted"
-    >
+    <span className="inline-flex items-center gap-1.5 rounded border border-line bg-ink-900 px-2.5 py-0.5 text-xs text-fg-muted">
       <span className={`h-2 w-2 rounded-full ${tone}`} aria-hidden />
-      <span className="text-fg">{STATE_LABEL[state]}</span>
+      {/* Only the state is announced; the retry text changes every few seconds and would chatter. */}
+      <span role="status" className="text-fg">
+        {STATE_LABEL[state]}
+      </span>
       {detail && <span>{detail}</span>}
     </span>
   );
@@ -456,7 +468,7 @@ function Toolbar({
           Clear filters
         </button>
       )}
-      <span className="ml-auto text-xs text-fg-faint">
+      <span className="ml-auto text-xs text-fg-muted">
         Showing {shown.toLocaleString()} of {total.toLocaleString()}
         {skipped > 0 && ` · ${skipped.toLocaleString()} not shown`}
       </span>
@@ -481,6 +493,11 @@ function LogTable({
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600);
   const firstId = useRef<string | undefined>(undefined);
+  // Only one row is a tab stop (a table of thousands of rows must not be thousands of Tab presses);
+  // the arrow keys move between rows. `wantFocus` is set by a key press, so rows arriving never
+  // pull focus away from where the user is.
+  const [stopId, setStopId] = useState<string>();
+  const wantFocus = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const el = scroller.current;
@@ -507,11 +524,55 @@ function LogTable({
     rows.length,
     Math.ceil((scrollTop + height) / ROW_HEIGHT) + OVERSCAN,
   );
+  const tabStop = rows.some((r) => r.id === stopId)
+    ? stopId
+    : (selectedId ?? rows[0]?.id);
+
+  // After a key press moved the tab stop, focus that row once it has been rendered.
+  useLayoutEffect(() => {
+    const id = wantFocus.current;
+    if (!id) return;
+    const el = scroller.current?.querySelector<HTMLElement>(
+      `[data-row-id="${id}"]`,
+    );
+    if (el) {
+      wantFocus.current = undefined;
+      el.focus();
+    }
+  }, [rows, start, end, stopId]);
+
+  const moveTo = (index: number) => {
+    const el = scroller.current;
+    const target = rows[Math.max(0, Math.min(rows.length - 1, index))];
+    if (!el || !target) return;
+    const top = rows.indexOf(target) * ROW_HEIGHT;
+    if (top < el.scrollTop) el.scrollTop = top;
+    else if (top + ROW_HEIGHT > el.scrollTop + el.clientHeight)
+      el.scrollTop = top + ROW_HEIGHT - el.clientHeight;
+    setScrollTop(el.scrollTop); // render the new window now, not on the scroll event
+    wantFocus.current = target.id;
+    setStopId(target.id);
+  };
+  const page = Math.max(1, Math.floor(height / ROW_HEIGHT) - 1);
+  const onRowKey = (e: React.KeyboardEvent, index: number) => {
+    const next: Record<string, number> = {
+      ArrowDown: index + 1,
+      ArrowUp: index - 1,
+      PageDown: index + page,
+      PageUp: index - page,
+      Home: 0,
+      End: rows.length - 1,
+    };
+    if (e.key in next) {
+      e.preventDefault();
+      moveTo(next[e.key]);
+    }
+  };
 
   return (
     <div
       className="flex min-w-0 flex-1 flex-col"
-      role="table"
+      role="grid"
       aria-label="Firewall log rows"
       aria-rowcount={rows.length}
     >
@@ -554,6 +615,7 @@ function LogTable({
           </EmptyState>
         ) : (
           <div
+            role="rowgroup"
             style={{ height: rows.length * ROW_HEIGHT, position: 'relative' }}
           >
             {rows.slice(start, end).map((row, i) => (
@@ -562,7 +624,9 @@ function LogTable({
                 row={row}
                 index={start + i}
                 selected={row.id === selectedId}
+                tabStop={row.id === tabStop}
                 onSelect={onSelect}
+                onKey={onRowKey}
               />
             ))}
           </div>
@@ -576,25 +640,31 @@ function LogRow({
   row,
   index,
   selected,
+  tabStop,
   onSelect,
+  onKey,
 }: {
   row: FirewallLogRow;
   index: number;
   selected: boolean;
+  /** The one row Tab lands on; the arrow keys move between rows. */
+  tabStop: boolean;
   onSelect: (row: FirewallLogRow) => void;
+  onKey: (e: React.KeyboardEvent, index: number) => void;
 }) {
   return (
     <div
       role="row"
+      data-row-id={row.id}
       aria-rowindex={index + 1}
       aria-selected={selected}
-      tabIndex={0}
+      tabIndex={tabStop ? 0 : -1}
       onClick={() => onSelect(row)}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onSelect(row);
-        }
+        } else onKey(e, index);
       }}
       style={{
         position: 'absolute',
@@ -603,39 +673,43 @@ function LogRow({
       }}
       className={`grid w-full ${COLUMNS} cursor-default items-center gap-x-3 border-b border-line/40 pl-6 pr-4 text-sm hover:bg-ink-850 focus:outline-none focus-visible:ring-1 focus-visible:ring-azure ${selected ? 'bg-ink-800' : ''}`}
     >
-      <span role="cell" className="netval truncate text-fg-muted">
+      <span role="gridcell" className="netval truncate text-fg-muted">
         {localTime(row.time)}
       </span>
-      <span role="cell">
+      <span role="gridcell">
         <Badge tone={CATEGORY_TONE[row.category] ?? 'neutral'}>
           {row.category}
         </Badge>
       </span>
-      <span role="cell" className="truncate text-fg-muted" title={row.protocol}>
+      <span
+        role="gridcell"
+        className="truncate text-fg-muted"
+        title={row.protocol}
+      >
         {row.protocol}
       </span>
       <span
-        role="cell"
+        role="gridcell"
         className="netval truncate"
         title={endpoint(row.sourceIp, row.sourcePort)}
       >
         {endpoint(row.sourceIp, row.sourcePort)}
       </span>
-      <span role="cell" className="netval truncate" title={row.targetIp}>
+      <span role="gridcell" className="netval truncate" title={row.targetIp}>
         {row.targetIp}
       </span>
-      <span role="cell" className="netval truncate">
+      <span role="gridcell" className="netval truncate">
         {row.targetPort}
       </span>
       <span
-        role="cell"
+        role="gridcell"
         className={`truncate font-medium ${actionClass(row.action)}`}
         title={row.action}
       >
         {row.action}
       </span>
       <span
-        role="cell"
+        role="gridcell"
         className="truncate text-fg-muted"
         title={row.policy || row.moreInfo}
       >
@@ -695,6 +769,12 @@ function DetailPanel({
   return (
     <aside
       aria-label="Log row details"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
       className="w-80 shrink-0 overflow-y-auto border-l border-line bg-ink-900 p-4"
     >
       <div className="mb-3 flex items-center">
@@ -713,7 +793,7 @@ function DetailPanel({
           .filter(([, v]) => v && v !== '-')
           .map(([k, v]) => (
             <div key={k}>
-              <dt className="text-xs text-fg-faint">{k}</dt>
+              <dt className="text-xs text-fg-muted">{k}</dt>
               <dd className="netval break-all">{v}</dd>
             </div>
           ))}
@@ -743,7 +823,7 @@ function DetailPanel({
         </button>
       )}
       {suggested && !suggested.ok && (
-        <p className="mt-2 text-xs text-fg-faint">
+        <p className="mt-2 text-xs text-fg-muted">
           Can&apos;t suggest a rule: {suggested.reason}
         </p>
       )}
