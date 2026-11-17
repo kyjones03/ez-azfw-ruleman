@@ -115,7 +115,7 @@ The app sends no telemetry or data to the maintainers. It connects to Microsoft 
 
 ## Screenshots
 
-All screenshots use fictional Contoso demo data, not a real Azure environment.
+All screenshots use Contoso demo data from a demo environment, not a production Azure environment.
 
 <details>
 <summary>Firewalls and policy settings</summary>
@@ -141,6 +141,14 @@ All screenshots use fictional Contoso demo data, not a real Azure environment.
 
 ![Rule editor with IP group pickers](docs/images/rule-editor.png)
 ![Changes and risk warnings reviewed before commit](docs/images/commit-review.png)
+
+</details>
+
+<details>
+<summary>Firewall logs</summary>
+
+![Detected Event Hubs for your firewalls, with Set up logging and the connection settings](docs/images/firewall-logs-setup.png)
+![Live firewall logs with filters, export and the details panel](docs/images/firewall-logs.png)
 
 </details>
 
