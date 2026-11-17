@@ -805,21 +805,28 @@ export function reviewLines(plan: ProvisionPlan): string[] {
         );
         break;
       case 'resourceGroup':
-        lines.push(`Create resource group ${step.name} in ${step.location}`);
+        lines.push(
+          `Create resource group ${step.name} in ${step.location} (subscription ${step.subscriptionId})`,
+        );
         break;
       case 'eventHubs':
-        lines.push(...step.creates.map((c) => `Create ${c}`));
+        lines.push(
+          ...step.creates.map(
+            (c) =>
+              `Create ${c} (subscription ${step.subscriptionId}, resource group ${step.resourceGroup})`,
+          ),
+        );
         break;
       case 'diagnosticSetting':
         lines.push(
           step.action === 'noop'
-            ? `${step.firewallName}: diagnostic setting "${step.settingName}" already sends these logs; no change`
-            : `${step.firewallName}: ${step.action === 'create' ? 'create' : 'update'} diagnostic setting "${step.settingName}": ${step.changes.join('; ')}`,
+            ? `${step.firewallName}: diagnostic setting "${step.settingName}" already sends these logs; no change (firewall ${step.firewallId})`
+            : `${step.firewallName}: ${step.action === 'create' ? 'create' : 'update'} diagnostic setting "${step.settingName}": ${step.changes.join('; ')} (firewall ${step.firewallId})`,
         );
         break;
       case 'role':
         lines.push(
-          `Give you the ${step.roleName} role on event hub ${step.scope.split('/').pop()} (this hub only)`,
+          `Give you the ${step.roleName} role on event hub ${step.scope} (this hub only)`,
         );
         break;
     }

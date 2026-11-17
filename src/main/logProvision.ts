@@ -1,10 +1,10 @@
 // Sets up firewall logging in Azure: Event Hub resources, the firewalls' diagnostic settings and
 // the Data Receiver role. Everything that changes Azure comes from one plan (see
 // src/shared/logProvision.ts); the review screen shows it and `applySetup` runs it.
-import { createHash } from 'node:crypto';
 import { armRequest } from './arm';
 import { describeAzureError, discoverFirewalls } from './azure';
 import { grantRole } from './roleAssignments';
+import { reviewPlanHash } from './reviewPlan';
 import {
   buildProvisionPlan,
   COST_NOTE,
@@ -218,9 +218,6 @@ async function prepare(raw: unknown): Promise<{
   };
 }
 
-const hashOf = (lines: string[]) =>
-  createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 16);
-
 export async function reviewSetup(raw: unknown): Promise<SetupReview> {
   const { req, setup, plan } = await prepare(raw);
   const check = validateProvisionRequest(req, toProvisionContext(setup));
@@ -232,7 +229,7 @@ export async function reviewSetup(raw: unknown): Promise<SetupReview> {
     lines,
     permissions: requiredPermissions(plan),
     cost: d.kind === 'new' ? COST_NOTE[d.tier] : undefined,
-    hash: hashOf(lines),
+    hash: reviewPlanHash('logging-setup', { req, plan, check }),
     labels: stepLabels(plan),
   };
 }
@@ -362,7 +359,7 @@ export async function applySetup(
     const { req, setup, plan } = await prepare(raw);
     const check = validateProvisionRequest(req, toProvisionContext(setup));
     if (check.errors.length) throw new Error(check.errors.join(' '));
-    if (hashOf(reviewLines(plan)) !== expectedHash)
+    if (reviewPlanHash('logging-setup', { req, plan, check }) !== expectedHash)
       throw new Error(
         'Something in Azure changed since you reviewed this. Go back and review the changes again.',
       );

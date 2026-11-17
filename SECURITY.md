@@ -4,6 +4,12 @@
 
 Only the latest release receives security fixes.
 
+## Development dependency advisory status (2026-11-17)
+
+- The affected modern `glob` and `minimatch` dependency chains are overridden to patched versions (`glob` 14.0.4 and `minimatch` 11.0.6). Legacy major versions outside these advisories' affected ranges are retained for API compatibility.
+- **Unresolved:** GHSA-fc5q-39xc-vjpf affects every available `picomatch` release through 4.0.7. No patched release is published. This is a high-severity regular-expression denial of service in development tooling, not a production dependency. Do not feed untrusted glob patterns into build, watch or test tooling. Reassess and remove this exception when an upstream patch is available; this is not a clean vulnerability audit.
+- The lockfile omits registry-specific tarball URLs using npm's supported `omit-lockfile-registry-resolved` mode. Versions and integrity checks remain pinned; installs resolve tarballs through the caller's configured registry.
+
 ## Reporting a vulnerability
 
 Please **do not** open a public issue for security problems.

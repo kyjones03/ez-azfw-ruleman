@@ -4,10 +4,10 @@
 // ResourceGroupNotFound). A 403, a subscription we cannot see, or any other failure means "could
 // not check", and no cleanup is offered. The review and the apply both rebuild the plan from fresh
 // Azure state, and apply refuses to run if it differs from what was reviewed.
-import { createHash } from 'node:crypto';
 import { armRequest } from './arm';
 import { describeAzureError, discoverFirewalls } from './azure';
 import { loadState } from './store';
+import { reviewPlanHash } from './reviewPlan';
 import {
   CLEANUP_PERMISSION,
   danglingSettings,
@@ -89,9 +89,6 @@ export async function findDanglingSettings(
 
 // ── review and apply ─────────────────────────────────────────────────────────
 
-const hashOf = (lines: string[]) =>
-  createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 16);
-
 const settingUrl = (firewallId: string, name: string) =>
   `${firewallId}/providers/Microsoft.Insights/diagnosticSettings/${encodeURIComponent(name)}?api-version=${DIAGNOSTIC_SETTINGS_API_VERSION}`;
 
@@ -102,6 +99,7 @@ async function prepare(
 ): Promise<{
   firewallId: string;
   settingName: string;
+  properties: Json;
   plan: CleanupPlan;
 }> {
   if (typeof firewallId !== 'string' || typeof settingName !== 'string')
@@ -128,18 +126,23 @@ async function prepare(
       `Couldn't read diagnostic setting "${settingName}": ${describeAzureError(err)}`,
     );
   }
+  // Include the source properties too: trimming removes the old destination from the PUT body,
+  // and a DELETE has no body at all, but both must still confirm the same setting/destination.
+  const target = {
+    firewallId: fw.id,
+    settingName,
+    properties: obj(obj(existing).properties),
+  };
   const namespaceId = namespaceIdOfRule(
-    obj(obj(existing).properties).eventHubAuthorizationRuleId,
+    target.properties.eventHubAuthorizationRuleId,
   );
   if (!namespaceId || !(await namespaceIsGone(namespaceId)))
     return {
-      firewallId: fw.id,
-      settingName,
+      ...target,
       plan: { action: 'noop', kept: [], lines: [] },
     };
   return {
-    firewallId: fw.id,
-    settingName,
+    ...target,
     plan: planCleanup(existing, fw.name, namespaceId),
   };
 }
@@ -149,7 +152,8 @@ export async function reviewCleanup(
   firewallId: unknown,
   settingName: unknown,
 ): Promise<CleanupReview> {
-  const { plan } = await prepare(firewallId, settingName);
+  const prepared = await prepare(firewallId, settingName);
+  const { plan } = prepared;
   if (plan.action === 'noop')
     throw new Error(
       'Nothing to clean up: the setting changed, or its namespace could not be confirmed as deleted.',
@@ -158,7 +162,7 @@ export async function reviewCleanup(
     action: plan.action,
     lines: plan.lines,
     permission: CLEANUP_PERMISSION,
-    hash: hashOf(plan.lines),
+    hash: reviewPlanHash('logging-cleanup', prepared),
   };
 }
 
@@ -168,16 +172,13 @@ export async function applyCleanup(
   settingName: unknown,
   reviewHash: string,
 ): Promise<{ action: 'trim' | 'delete' }> {
-  const {
-    firewallId: id,
-    settingName: name,
-    plan,
-  } = await prepare(firewallId, settingName);
+  const prepared = await prepare(firewallId, settingName);
+  const { firewallId: id, settingName: name, plan } = prepared;
   if (plan.action === 'noop')
     throw new Error(
       'Nothing to clean up: the setting changed, or its namespace could not be confirmed as deleted.',
     );
-  if (hashOf(plan.lines) !== reviewHash)
+  if (reviewPlanHash('logging-cleanup', prepared) !== reviewHash)
     throw new Error(
       'Azure changed since the review. Review the cleanup again before applying it.',
     );

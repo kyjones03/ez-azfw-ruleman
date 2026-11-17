@@ -194,6 +194,7 @@ async function settleWithin(p: Promise<unknown>, ms: number): Promise<void> {
 export class LogStreamSession {
   private ctl?: AbortController;
   private task: Promise<void> = Promise.resolve();
+  private lifecycle: Promise<void> = Promise.resolve();
   private _status: LogStreamStatus = IDLE_STATUS;
 
   constructor(private readonly deps: SessionDeps) {}
@@ -202,32 +203,46 @@ export class LogStreamSession {
     return this._status;
   }
 
-  /** Starts (or restarts) streaming. Returns once started; progress arrives through the deps. */
   /**
    * Starts (or restarts) streaming. With `permissionGraceMs`, a missing-role error is retried for
    * that long instead of failing at once: a role assigned a moment ago takes minutes to apply.
    */
-  async start(
+  start(
     config: LogStreamConfig,
     options: { permissionGraceMs?: number } = {},
   ): Promise<void> {
-    await this.stop();
-    const ctl = new AbortController();
-    this.ctl = ctl;
-    const graceUntil = Date.now() + (options.permissionGraceMs ?? 0);
-    this.task = this.run(config, ctl.signal, graceUntil).catch((err) => {
-      this.setStatus({
-        state: 'failed',
-        detail: 'unexpected error',
-        error: safeErrorText(err),
-        hint: '',
-        config,
+    return this.enqueue(async () => {
+      // Do not enqueue stop() from inside the queue: it would wait on this start.
+      await this.stopInternal();
+      const ctl = new AbortController();
+      this.ctl = ctl;
+      const graceUntil = Date.now() + (options.permissionGraceMs ?? 0);
+      this.task = this.run(config, ctl.signal, graceUntil).catch((err) => {
+        if (ctl.signal.aborted) return;
+        this.setStatus({
+          state: 'failed',
+          detail: 'unexpected error',
+          error: safeErrorText(err),
+          hint: '',
+          config,
+        });
       });
     });
   }
 
   /** Stops streaming and waits for the connection to close. Safe to call at any time. */
-  async stop(): Promise<void> {
+  stop(): Promise<void> {
+    return this.enqueue(() => this.stopInternal());
+  }
+
+  private enqueue(operation: () => Promise<void>): Promise<void> {
+    const result = this.lifecycle.then(operation);
+    // A caller still sees its rejection, but later lifecycle operations must remain usable.
+    this.lifecycle = result.catch(() => undefined);
+    return result;
+  }
+
+  private async stopInternal(): Promise<void> {
     const ctl = this.ctl;
     if (!ctl) return;
     this.ctl = undefined;
@@ -254,8 +269,9 @@ export class LogStreamSession {
     const flushMs = deps.flushMs ?? 1000;
     const probeMs = deps.probeTimeoutMs ?? 15_000;
     const closeMs = deps.closeTimeoutMs ?? 5000;
-    const status = (s: Omit<LogStreamStatus, 'config'>) =>
-      this.setStatus({ ...s, config });
+    const status = (s: Omit<LogStreamStatus, 'config'>) => {
+      if (!signal.aborted) this.setStatus({ ...s, config });
+    };
 
     /** Last sequence number seen per partition, so a reconnect continues where it stopped. */
     const lastSeen = new Map<string, number>();
@@ -267,6 +283,8 @@ export class LogStreamSession {
     let lastKind: ErrorKind | undefined;
 
     const flush = () => {
+      // Stop/sign-out discards buffered data; an aborted stream must never reach the UI.
+      if (signal.aborted) return;
       if (pending.length === 0 && skipped === 0) return;
       let rows = pending;
       let dropped = 0;
@@ -294,6 +312,8 @@ export class LogStreamSession {
       let client: HubClient | undefined;
       let subscription: HubSubscription | undefined;
       let timer: ReturnType<typeof setInterval> | undefined;
+      let accepting = true;
+      let onAbort: (() => void) | undefined;
       let connectedAt = 0;
       let gotEvents = false;
       try {
@@ -320,13 +340,15 @@ export class LogStreamSession {
         let fail!: (err: unknown) => void;
         const failed = new Promise<never>((_, reject) => (fail = reject));
         failed.catch(() => undefined); // handled by the race below
-        const aborted = new Promise<void>((resolve) =>
-          signal.addEventListener('abort', () => resolve(), { once: true }),
-        );
+        const aborted = new Promise<void>((resolve) => {
+          onAbort = resolve;
+          signal.addEventListener('abort', onAbort, { once: true });
+        });
 
         subscription = client.subscribe(
           {
             onEvents: (partitionId, events) => {
+              if (signal.aborted || !accepting) return;
               for (const event of events) {
                 gotEvents = true;
                 lastSeen.set(partitionId, event.sequenceNumber);
@@ -342,7 +364,9 @@ export class LogStreamSession {
                 }
               }
             },
-            onError: (err) => fail(err),
+            onError: (err) => {
+              if (!signal.aborted && accepting) fail(err);
+            },
           },
           start,
         );
@@ -354,6 +378,9 @@ export class LogStreamSession {
         lastError = err;
         lastKind = classifyError(err);
       } finally {
+        // SDK close can time out, and old handlers can still fire after a reconnect.
+        accepting = false;
+        if (onAbort) signal.removeEventListener('abort', onAbort);
         if (timer) clearInterval(timer);
         flush();
         const closing = Promise.allSettled([

@@ -4,7 +4,9 @@ const mocks = vi.hoisted(() => ({
   armRequest: vi.fn(),
   discoverFirewalls: vi.fn(),
   grantRole: vi.fn(),
+  getAccount: vi.fn(),
 }));
+vi.mock('./auth', () => ({ getAccount: mocks.getAccount }));
 vi.mock('./arm', () => ({ armRequest: mocks.armRequest }));
 vi.mock('./azure', () => ({
   discoverFirewalls: mocks.discoverFirewalls,
@@ -158,6 +160,11 @@ const writes = () =>
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.getAccount.mockReturnValue({
+    method: 'cli',
+    username: 'reviewer@example.com',
+    tenantId: SUB,
+  });
   deps.sleep.mockClear();
   world = { settings: [], providers: {}, deployment: [], calls: [] };
   mocks.armRequest.mockImplementation((path: string, init?: RequestInit) =>
@@ -276,7 +283,9 @@ describe('reviewSetup', () => {
   it("lists the changes, the permissions and the cost, and uses Azure's facts for the firewall", async () => {
     const review = await reviewSetup(request());
     expect(review.errors).toEqual([]);
-    expect(review.lines[0]).toBe('Create resource group rg-logs in eastus2'); // region from Azure, not the "westus" the caller sent
+    expect(review.lines[0]).toBe(
+      `Create resource group rg-logs in eastus2 (subscription ${SUB})`,
+    ); // region from Azure, not the "westus" the caller sent
     expect(review.lines.join('\n')).toContain(
       'fw1: create diagnostic setting "ez-azfw-logs"',
     );
@@ -393,6 +402,65 @@ describe('applySetup', () => {
     await expect(
       applySetup(request(), 'stale-hash', () => undefined, deps),
     ).rejects.toThrow(/changed since you reviewed/);
+    expect(writes()).toEqual([]);
+    expect(mocks.grantRole).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { subscriptionId: '11111111-1111-1111-1111-111111111111' },
+    { resourceGroup: 'other-logs' },
+  ])(
+    'rejects a changed destination scope %j before any writes',
+    async (destination) => {
+      const { hash } = await reviewSetup(request());
+      await expect(
+        applySetup(request({}, destination), hash, vi.fn(), deps),
+      ).rejects.toThrow(/changed since you reviewed/);
+      expect(writes()).toEqual([]);
+      expect(mocks.grantRole).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['workspaceId', '/workspaces/other'],
+    ['storageAccountId', '/storage/other'],
+    ['metrics', [{ category: 'AllMetrics', enabled: true }]],
+    ['customProperty', { retained: 'changed' }],
+  ])(
+    'rejects changed preserved diagnostic property %s even with identical prose',
+    async (key, value) => {
+      const properties: Record<string, unknown> = {
+        eventHubAuthorizationRuleId: `${NS_ID}/authorizationRules/ez-azfw-logs-send`,
+        eventHubName: 'firewall-logs',
+        logs: [],
+      };
+      world.settings = [{ name: 'mine', properties }];
+      const review = await reviewSetup(request());
+      properties[key] = value;
+      const changed = await reviewSetup(request());
+      expect(changed.lines).toEqual(review.lines);
+      expect(changed.hash).not.toBe(review.hash);
+      await expect(
+        applySetup(request(), review.hash, vi.fn(), deps),
+      ).rejects.toThrow(/changed since you reviewed/);
+      expect(writes()).toEqual([]);
+      expect(mocks.grantRole).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { tenantId: 'other-tenant' },
+    { username: 'other@example.com' },
+    { method: 'browser' },
+    null,
+  ])('rejects a changed active account context %j', async (change) => {
+    const { hash } = await reviewSetup(request());
+    mocks.getAccount.mockReturnValue(
+      change === null ? null : { ...mocks.getAccount(), ...change },
+    );
+    await expect(applySetup(request(), hash, vi.fn(), deps)).rejects.toThrow(
+      /changed since you reviewed/,
+    );
     expect(writes()).toEqual([]);
     expect(mocks.grantRole).not.toHaveBeenCalled();
   });

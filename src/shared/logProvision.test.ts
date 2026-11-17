@@ -757,13 +757,13 @@ describe('review text', () => {
       ctx(),
     );
     expect(reviewLines(plan)).toEqual([
-      'Create resource group rg-logs in eastus2',
-      'Create Event Hubs namespace contoso-logs (Standard tier, eastus2, local authentication disabled)',
-      'Create Event hub firewall-logs (1 partition, 24 hours retention)',
-      'Create Access rule ez-azfw-logs-send on contoso-logs, with the Send right only',
-      'Create Consumer group ruleman on firewall-logs',
-      'fw1: create diagnostic setting "ez-azfw-logs": Send to event hub firewall-logs; Turn on NetworkRule; Turn on AppRule; Turn on NATRule; Turn on ThreatIntel; Turn on IDPS; Turn on DnsQuery; Turn on DnsFailure',
-      'Give you the Azure Event Hubs Data Receiver role on event hub firewall-logs (this hub only)',
+      `Create resource group rg-logs in eastus2 (subscription ${SUB})`,
+      `Create Event Hubs namespace contoso-logs (Standard tier, eastus2, local authentication disabled) (subscription ${SUB}, resource group rg-logs)`,
+      `Create Event hub firewall-logs (1 partition, 24 hours retention) (subscription ${SUB}, resource group rg-logs)`,
+      `Create Access rule ez-azfw-logs-send on contoso-logs, with the Send right only (subscription ${SUB}, resource group rg-logs)`,
+      `Create Consumer group ruleman on firewall-logs (subscription ${SUB}, resource group rg-logs)`,
+      `fw1: create diagnostic setting "ez-azfw-logs": Send to event hub firewall-logs; Turn on NetworkRule; Turn on AppRule; Turn on NATRule; Turn on ThreatIntel; Turn on IDPS; Turn on DnsQuery; Turn on DnsFailure (firewall ${FW_ID})`,
+      `Give you the Azure Event Hubs Data Receiver role on event hub ${NS_ID}/eventhubs/firewall-logs (this hub only)`,
     ]);
   });
   it('says so when nothing needs to change on a firewall', () => {
@@ -776,7 +776,22 @@ describe('review text', () => {
       buildProvisionPlan(existingReq({}, { grantRole: false }), ctx([owner])),
     );
     expect(lines.at(-1)).toBe(
-      'fw1: diagnostic setting "mine" already sends these logs; no change',
+      `fw1: diagnostic setting "mine" already sends these logs; no change (firewall ${FW_ID})`,
+    );
+  });
+  it('distinguishes same-named destinations across subscriptions and resource groups', () => {
+    const original = reviewLines(buildProvisionPlan(newReq(), ctx()));
+    for (const destination of [
+      { subscriptionId: '11111111-1111-1111-1111-111111111111' },
+      { resourceGroup: 'other-logs' },
+    ]) {
+      expect(
+        reviewLines(buildProvisionPlan(newReq({}, destination), ctx())),
+      ).not.toEqual(original);
+    }
+    expect(original.join('\n')).toContain(FW_ID);
+    expect(original.join('\n')).toContain(
+      `subscription ${SUB}, resource group rg-logs`,
     );
   });
   it('names the permissions the steps need, and drops the ones that are not needed', () => {

@@ -100,6 +100,12 @@ const fail =
     Promise.reject(Object.assign(new Error(message), { name }));
 const tick = (ms: number) => vi.advanceTimersByTimeAsync(ms);
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
@@ -199,16 +205,156 @@ describe('LogStreamSession', () => {
     await t.session.stop();
   });
 
-  it('stop closes the subscription and client, flushes, and reports stopped', async () => {
+  it('stop closes the subscription and client, discards buffered data, and reports stopped', async () => {
     const t = setup([ok]);
     await t.session.start(CONFIG);
     await tick(0);
     t.hub().handlers.onEvents('0', [message([record(1)], 1)]);
     await t.session.stop();
     expect(t.hub().subClosed && t.hub().closed).toBe(true);
-    expect(t.batches).toHaveLength(1);
+    expect(t.batches).toHaveLength(0);
     expect(t.last().state).toBe('stopped');
     await t.session.stop(); // idempotent
+  });
+
+  it('serializes concurrent starts and stop closes every receiver', async () => {
+    const t = setup([ok, ok]);
+    const other = { ...CONFIG, eventHub: 'other' };
+    await Promise.all([t.session.start(CONFIG), t.session.start(other)]);
+    await tick(0);
+
+    expect(FakeHub.instances).toHaveLength(2);
+    expect(t.hub(0).subClosed && t.hub(0).closed).toBe(true);
+    expect(t.hub(1).subClosed || t.hub(1).closed).toBe(false);
+    expect(t.last()).toMatchObject({ state: 'connected', config: other });
+
+    await t.session.stop();
+    expect(FakeHub.instances.every((h) => h.subClosed && h.closed)).toBe(true);
+    expect(t.last()).toMatchObject({ state: 'stopped', config: other });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('orders a start immediately followed by concurrent stops without reviving it', async () => {
+    const t = setup([ok]);
+    await Promise.all([
+      t.session.start(CONFIG),
+      t.session.stop(),
+      t.session.stop(),
+    ]);
+    const statuses = [...t.statuses];
+    await tick(30_000);
+
+    expect(FakeHub.instances).toHaveLength(1);
+    expect(t.hub().closed).toBe(true);
+    expect(t.last().state).toBe('stopped');
+    expect(t.statuses).toEqual(statuses);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('waits for an overlapping stop to finish closing before the next start', async () => {
+    const t = setup([ok, ok]);
+    await t.session.start(CONFIG);
+    await tick(0);
+    const closing = deferred<void>();
+    const close = vi.spyOn(t.hub(), 'close').mockImplementation(async () => {
+      await closing.promise;
+      t.hub(0).closed = true;
+    });
+
+    const stopping = t.session.stop();
+    const starting = t.session.start({ ...CONFIG, eventHub: 'other' });
+    await tick(0);
+    expect(close).toHaveBeenCalledOnce();
+    expect(FakeHub.instances).toHaveLength(1);
+
+    closing.resolve();
+    await Promise.all([stopping, starting]);
+    await tick(0);
+    expect(t.hub(0).subClosed && t.hub(0).closed).toBe(true);
+    expect(t.last()).toMatchObject({
+      state: 'connected',
+      config: { eventHub: 'other' },
+    });
+    await t.session.stop();
+  });
+
+  it('does not subscribe or report connected when a probe resolves after stop', async () => {
+    const probe = deferred<string[]>();
+    const t = setup([() => probe.promise, ok]);
+    await t.session.start(CONFIG);
+    const stopping = t.session.stop();
+    const starting = t.session.start({ ...CONFIG, eventHub: 'other' });
+    await tick(0);
+    probe.resolve(['0']);
+    await Promise.all([stopping, starting]);
+    await tick(0);
+
+    expect(t.hub(0).handlers).toBeUndefined();
+    expect(t.hub(0).closed).toBe(true);
+    expect(
+      t.statuses
+        .filter((s) => s.config?.eventHub === CONFIG.eventHub)
+        .map((s) => s.state),
+    ).toEqual(['connecting', 'stopped']);
+    expect(t.last()).toMatchObject({
+      state: 'connected',
+      config: { eventHub: 'other' },
+    });
+    await t.session.stop();
+  });
+
+  it('ignores events and errors during abort cleanup and after stop/sign-out', async () => {
+    const t = setup([ok]);
+    await t.session.start(CONFIG);
+    await tick(0);
+    const hub = t.hub();
+    hub.handlers.onEvents('0', [message([record(1)], 1)]);
+    const lateCallbacks = () => {
+      hub.handlers.onEvents('0', [message([record(2)], 2)]);
+      hub.handlers.onError(new Error('You are signed out'));
+    };
+    const closing = deferred<void>();
+    hub.close = async () => {
+      lateCallbacks();
+      await closing.promise;
+      hub.closed = true;
+    };
+    const stopping = t.session.stop();
+    await tick(0);
+    lateCallbacks();
+    expect(t.batches).toHaveLength(0);
+    closing.resolve();
+    await stopping;
+    const statuses = [...t.statuses];
+    lateCallbacks();
+    await tick(30_000);
+
+    expect(t.batches).toHaveLength(0);
+    expect(t.statuses).toEqual(statuses);
+    expect(t.last().state).toBe('stopped');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('ignores retired callbacks after replacement, even when close timed out', async () => {
+    const t = setup([ok, ok]);
+    await t.session.start(CONFIG);
+    await tick(0);
+    const old = t.hub();
+    old.close = () => new Promise(() => undefined);
+    const starting = t.session.start({ ...CONFIG, eventHub: 'other' });
+    await tick(5000);
+    await starting;
+    const statuses = [...t.statuses];
+    old.handlers.onEvents('0', [message([record(1)], 1)]);
+    old.handlers.onError(new Error('late unauthorized'));
+    t.hub().handlers.onEvents('0', [message([record(2)], 2)]);
+    await tick(1000);
+
+    expect(t.statuses).toEqual(statuses);
+    expect(t.batches.flatMap((b) => b.rows).map((r) => r.time)).toEqual([
+      record(2).time,
+    ]);
+    await t.session.stop();
   });
 
   it('retries the first connection three times with 2/5/10 s countdowns, then fails with a hint', async () => {
@@ -325,6 +471,29 @@ describe('LogStreamSession', () => {
     });
     // Nothing received before the drop is lost: the flush in `finally` delivered it.
     expect(t.batches.flatMap((b) => b.rows)).toHaveLength(2);
+    await t.session.stop();
+  });
+
+  it('ignores a retired retry receiver without changing rows or resume offsets', async () => {
+    const t = setup([ok, ok]);
+    await t.session.start(CONFIG);
+    await tick(0);
+    const old = t.hub();
+    old.handlers.onEvents('0', [message([record(1)], 41)]);
+    old.handlers.onError(new Error('link detached'));
+    await tick(0);
+    old.handlers.onEvents('0', [message([record(2)], 999)]);
+    old.handlers.onError(new Error('late unauthorized'));
+    await tick(2000);
+
+    expect(t.hub().starts['0']).toEqual({ afterSequenceNumber: 41 });
+    expect(t.last().state).toBe('connected');
+    const statuses = [...t.statuses];
+    old.handlers.onEvents('0', [message([record(3)], 1000)]);
+    old.handlers.onError(new Error('late unauthorized'));
+    await tick(1000);
+    expect(t.statuses).toEqual(statuses);
+    expect(t.batches.flatMap((b) => b.rows)).toHaveLength(1);
     await t.session.stop();
   });
 

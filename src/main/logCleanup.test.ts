@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   armRequest: vi.fn(),
   discoverFirewalls: vi.fn(),
+  getAccount: vi.fn(),
   managed: [] as string[],
 }));
+vi.mock('./auth', () => ({ getAccount: mocks.getAccount }));
 vi.mock('./arm', () => ({ armRequest: mocks.armRequest }));
 vi.mock('./azure', () => ({
   discoverFirewalls: mocks.discoverFirewalls,
@@ -48,6 +50,11 @@ const firewall = (
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.getAccount.mockReturnValue({
+    method: 'cli',
+    username: 'reviewer@example.com',
+    tenantId: SUB,
+  });
   mocks.managed = [];
   mocks.discoverFirewalls.mockResolvedValue([
     { id: FW, name: 'fw-hub-eus2', location: 'eastus2' },
@@ -194,6 +201,85 @@ describe('applyCleanup', () => {
     arrange({});
     const { hash } = await reviewCleanup(FW, 'old');
     arrange({ storageAccountId: '/s/st' });
+    await expect(applyCleanup(FW, 'old', hash)).rejects.toThrow(
+      'Azure changed',
+    );
+    expect(writes()).toEqual([]);
+  });
+
+  it.each([
+    ['storageAccountId', '/s/other'],
+    ['workspaceId', '/w/other'],
+    ['logs', [{ category: 'AZFWNetworkRule', enabled: true }]],
+    ['metrics', [{ category: 'AllMetrics', enabled: true }]],
+    ['customProperty', { preserved: true }],
+  ])(
+    'rejects changes to preserved cleanup property %s with unchanged prose',
+    async (key, value) => {
+      const props = { storageAccountId: '/s/st', workspaceId: '/w/logs' };
+      arrange(props);
+      const review = await reviewCleanup(FW, 'old');
+      arrange({ ...props, [key]: value });
+      expect((await reviewCleanup(FW, 'old')).lines).toEqual(review.lines);
+      await expect(applyCleanup(FW, 'old', review.hash)).rejects.toThrow(
+        'Azure changed',
+      );
+      expect(writes()).toEqual([]);
+    },
+  );
+
+  it.each([{}, { storageAccountId: '/s/st' }])(
+    'rejects a changed deleted destination even with the same namespace name and action %j',
+    async (props) => {
+      arrange(props);
+      const review = await reviewCleanup(FW, 'old');
+      arrange({
+        ...props,
+        eventHubAuthorizationRuleId: RULE.replace(
+          SUB,
+          '11111111-1111-1111-1111-111111111111',
+        ),
+      });
+      expect((await reviewCleanup(FW, 'old')).lines).toEqual(review.lines);
+      await expect(applyCleanup(FW, 'old', review.hash)).rejects.toThrow(
+        'Azure changed',
+      );
+      expect(writes()).toEqual([]);
+    },
+  );
+
+  it.each(['firewall', 'setting'])(
+    'rejects a changed cleanup %s target with unchanged prose',
+    async (target) => {
+      arrange({});
+      const review = await reviewCleanup(FW, 'old');
+      const otherFw = FW.replace(SUB, '11111111-1111-1111-1111-111111111111');
+      mocks.discoverFirewalls.mockResolvedValue([
+        { id: FW, name: 'fw-hub-eus2', location: 'eastus2' },
+        { id: otherFw, name: 'fw-hub-eus2', location: 'eastus2' },
+      ]);
+      await expect(
+        applyCleanup(
+          target === 'firewall' ? otherFw : FW,
+          target === 'setting' ? 'other' : 'old',
+          review.hash,
+        ),
+      ).rejects.toThrow('Azure changed');
+      expect(writes()).toEqual([]);
+    },
+  );
+
+  it.each([
+    { tenantId: 'other-tenant' },
+    { username: 'other@example.com' },
+    { method: 'browser' },
+    null,
+  ])('rejects a changed active cleanup account context %j', async (change) => {
+    arrange({});
+    const { hash } = await reviewCleanup(FW, 'old');
+    mocks.getAccount.mockReturnValue(
+      change === null ? null : { ...mocks.getAccount(), ...change },
+    );
     await expect(applyCleanup(FW, 'old', hash)).rejects.toThrow(
       'Azure changed',
     );

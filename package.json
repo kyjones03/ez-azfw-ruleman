@@ -39,6 +39,10 @@
     "icons": "node scripts/make-icons.mjs",
     "verify": "npm run lint && npm run typecheck && npm test"
   },
+  "overrides": {
+    "glob@>=9.0.0 <=14.0.1": "^14.0.4",
+    "minimatch@>=7.0.0 <11.0.1": "^11.0.6"
+  },
   "devDependencies": {
     "@electron-forge/cli": "^8.0.1",
     "@electron-forge/plugin-fuses": "^8.0.1",
