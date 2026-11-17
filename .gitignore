@@ -38,3 +38,9 @@ vite.config.*.timestamp-*
 .DS_Store
 Thumbs.db
 Desktop.ini
+.pi/
+.mcp.json
+
+# Local development notes (plans and handoffs), kept out of the public repository
+/docs/plan-*.md
+/docs/handoff-*.md
